@@ -1,0 +1,156 @@
+# USBIP Server Kconfig Configuration
+#
+# This file defines the configuration options for the USBIP Server
+# Similar to Linux kernel Kconfig
+
+mainmenu "USBIP Server Configuration"
+
+#============================================================================
+# Server Configuration
+#============================================================================
+
+menu "Server Configuration"
+
+config USBIP_SERVER_PORT
+    int "Server listen port"
+    default 3240
+    help
+        The TCP port for the USBIP server to listen on.
+        Default is 3240 (standard USBIP port).
+
+        Example:
+            To change to port 3241:
+                CONFIG_USBIP_SERVER_PORT=3241
+
+endmenu
+
+#============================================================================
+# Log Configuration
+#============================================================================
+
+menu "Log Configuration"
+
+config LOG_LEVEL
+    int "Default global log level"
+    default 3
+    range 0 4
+    help
+        Default log level for all modules.
+        0 = LOG_LEVEL_NONE (no output)
+        1 = LOG_LEVEL_ERR  (errors only)
+        2 = LOG_LEVEL_WRN  (warnings and above)
+        3 = LOG_LEVEL_INF  (info and above - default)
+        4 = LOG_LEVEL_DBG  (debug and above)
+
+config MAIN_LOG_LEVEL
+    int "Main module log level"
+    default 3
+    range 0 4
+
+config SERVER_LOG_LEVEL
+    int "Server module log level"
+    default 3
+    range 0 4
+
+config URB_LOG_LEVEL
+    int "URB module log level"
+    default 3
+    range 0 4
+
+config DEVMGR_LOG_LEVEL
+    int "Device manager module log level"
+    default 3
+    range 0 4
+
+config CONTROL_LOG_LEVEL
+    int "Control transfer module log level"
+    default 4
+    range 0 4
+
+config OSAL_LOG_LEVEL
+    int "OSAL module log level"
+    default 3
+    range 0 4
+
+config TRANSPORT_LOG_LEVEL
+    int "Transport module log level"
+    default 3
+    range 0 4
+
+config DAP_LOG_LEVEL
+    int "HID DAP module log level"
+    default 3
+    range 0 4
+
+config BULK_DAP_LOG_LEVEL
+    int "Bulk DAP v2 module log level"
+    default 3
+    range 0 4
+
+config HID_LOG_LEVEL
+    int "HID device module log level"
+    default 3
+    range 0 4
+
+config BULK_LOG_LEVEL
+    int "Bulk device module log level"
+    default 3
+    range 0 4
+
+endmenu
+
+#============================================================================
+# Debug Probe GPIO Configuration
+#============================================================================
+
+menu "Debug Probe GPIO Configuration"
+
+config GPIO_SWCLK
+    int "SWD Clock (SWCLK) GPIO pin"
+    default 17
+    range 0 27
+    help
+        GPIO pin number for SWD clock line.
+        Default is 17 (Pin 11 on Raspberry Pi 5).
+
+config GPIO_SWDIO
+    int "SWD Data I/O (SWDIO) GPIO pin"
+    default 27
+    range 0 27
+    help
+        GPIO pin number for SWD data line.
+        Default is 27 (Pin 13 on Raspberry Pi 5).
+
+config GPIO_TCK
+    int "JTAG Clock (TCK) GPIO pin"
+    default 17
+    range 0 27
+    help
+        GPIO pin number for JTAG clock line.
+        Default is 17.
+
+config GPIO_TMS
+    int "JTAG Mode Select (TMS) GPIO pin"
+    default 27
+    range 0 27
+    help
+        GPIO pin number for JTAG mode select line.
+        Default is 27.
+
+config GPIO_TDI
+    int "JTAG Data In (TDI) GPIO pin"
+    default 22
+    range 0 27
+    help
+        GPIO pin number for JTAG data input line.
+        Default is 22.
+
+config GPIO_TDO
+    int "JTAG Data Out (TDO) GPIO pin"
+    default 23
+    range 0 27
+    help
+        GPIO pin number for JTAG data output line.
+        Default is 23.
+
+endmenu

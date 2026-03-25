@@ -1,0 +1,22 @@
+# Build
+build/
+*.o
+*.a
+*.so
+
+# Binaries
+usbip-server
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temp files
+*.log
+*.bin
+msc_storage.bin
+
+# Test outputs
+test/*

@@ -1,0 +1,76 @@
+# USBIP Server 代码风格配置
+# 基于项目现有代码风格制定
+
+---
+Language: Cpp
+
+# 缩进配置
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+IndentCaseLabels: true
+IndentPPDirectives: AfterHash
+
+# 对齐配置
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignOperands: true
+AlignTrailingComments: true
+
+# 括号配置
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterClass: true
+  AfterControlStatement: true
+  AfterEnum: false
+  AfterFunction: true
+  AfterNamespace: true
+  AfterStruct: true
+  AfterUnion: true
+  BeforeCatch: true
+  BeforeElse: true
+  SplitEmptyFunction: true
+  SplitEmptyRecord: true
+
+# 指针引用对齐
+PointerAlignment: Left
+
+# 行宽
+ColumnLimit: 100
+
+# 包含排序
+SortIncludes: true
+IncludeCategories:
+  - Regex: '^<.*\.h>'
+    Priority: 1
+  - Regex: '^".*\.h"'
+    Priority: 2
+
+# 空格配置
+SpaceBeforeParens: ControlStatements
+SpaceInEmptyParentheses: false
+SpacesInAngles: false
+SpacesInCStyleCastParentheses: false
+SpacesInContainerLiterals: true
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+
+# 其他
+AllowShortBlocksOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+# AlwaysBreakAfterReturnType: TopLevelDefinitions  - 已禁用，避免 __attribute__ 与函数名分行
+AlwaysBreakAfterReturnType: None
+AlwaysBreakBeforeMultilineStrings: false
+BinPackArguments: true
+BinPackParameters: true
+BreakBeforeTernaryOperators: true
+
+# 数组初始化器格式 - 保持每个子数组在一行
+AllowAllArgumentsOnNextLine: false
+AllowAllConstructorInitializersOnNextLine: false
+ReflowComments: false
+
+...
