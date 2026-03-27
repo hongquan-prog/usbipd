@@ -14,8 +14,6 @@
  * Server core logic: connection management, device enumeration
  */
 #include <endian.h>
-#include <errno.h>
-#include <poll.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -266,36 +264,14 @@ int usbip_server_init(uint16_t port)
 
 int usbip_server_run(void)
 {
-    struct pollfd pfd;
     struct usbip_conn_ctx* ctx;
-    int listen_fd;
-
-    listen_fd = transport_get_poll_fd();
 
     while (s_running)
     {
-        pfd.fd = listen_fd;
-        pfd.events = POLLIN;
-
-        int ret = poll(&pfd, 1, 1000);
-        if (ret < 0)
+        ctx = transport_accept();
+        if (ctx)
         {
-            if (errno == EINTR)
-                continue;
-            LOG_ERR("poll failed");
-            break;
-        }
-
-        if (ret == 0)
-            continue;
-
-        if (pfd.revents & POLLIN)
-        {
-            ctx = transport_accept();
-            if (ctx)
-            {
-                usbip_server_handle_connection(ctx);
-            }
+            usbip_server_handle_connection(ctx);
         }
     }
 

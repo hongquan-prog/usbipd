@@ -238,13 +238,6 @@ static void tcp_destroy(struct usbip_transport* trans)
     osal_free(trans);
 }
 
-static int tcp_get_poll_fd(struct usbip_transport* trans)
-{
-    struct tcp_transport_priv* priv = trans->priv;
-
-    return priv ? priv->fd : -1;
-}
-
 /*****************************************************************************
  * Create Function (internal)
  *****************************************************************************/
@@ -255,7 +248,6 @@ static struct usbip_transport trans = {.priv = &priv,
                                        .recv = tcp_recv,
                                        .send = tcp_send,
                                        .close = tcp_close,
-                                       .destroy = tcp_destroy,
-                                       .get_poll_fd = tcp_get_poll_fd};
+                                       .destroy = tcp_destroy};
 
 TRANSPORT_REGISTER(espidf, trans);

@@ -103,12 +103,3 @@ void transport_destroy(void)
     }
     s_transport = NULL;
 }
-
-int transport_get_poll_fd(void)
-{
-    if (!s_transport || !s_transport->get_poll_fd)
-    {
-        return -1;
-    }
-    return s_transport->get_poll_fd(s_transport);
-}

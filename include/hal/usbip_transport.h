@@ -104,16 +104,6 @@ struct usbip_transport
      * @trans: Transport instance
      */
     void (*destroy)(struct usbip_transport* trans);
-
-    /**
-     * get_poll_fd - Get file descriptor for poll
-     * @trans: Transport instance
-     * Return: File descriptor, negative means invalid or not supported
-     *
-     * Note: Only used for poll to wait for new connections,
-     *       not applicable to all transport types.
-     */
-    int (*get_poll_fd)(struct usbip_transport* trans);
 };
 
 #ifdef __cplusplus
@@ -189,12 +179,6 @@ void transport_close(struct usbip_conn_ctx* ctx);
  * transport_destroy - Destroy default transport
  */
 void transport_destroy(void);
-
-/**
- * transport_get_poll_fd - Get poll fd from default transport
- * Return: File descriptor, negative on failure
- */
-int transport_get_poll_fd(void);
 
 #ifdef __cplusplus
 }
