@@ -15,6 +15,10 @@
 #include <stdint.h>
 #include "usbip_common.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*****************************************************************************
  * USB Standard Control Transfer Framework
  *
@@ -29,6 +33,20 @@
 #define USB_CONTROL_OK_NO_DATA 1 /* Success, no data */
 #define USB_CONTROL_STALL 2      /* Not supported, return STALL */
 #define USB_CONTROL_ERROR -1     /* Internal error */
+
+/**
+ * Initialize control transfer context (static initialization)
+ */
+#define USB_CONTROL_CONTEXT_INIT(dev_desc, cfg_desc, cfg_len)                                      \
+    {                                                                                              \
+        .device_desc = (dev_desc),                                                                 \
+        .config_desc = (cfg_desc),                                                                 \
+        .config_desc_len = (cfg_len),                                                              \
+        .num_configs = 1,                                                                          \
+        .address = 0,                                                                              \
+        .config_value = 0,                                                                         \
+    }
+
 
 /*****************************************************************************
  * Configuration
@@ -190,17 +208,8 @@ int usb_control_get_status(const struct usb_setup_packet* setup, struct usb_cont
 int usb_control_class_request(const struct usb_setup_packet* setup, struct usb_control_context* ctx,
                               void** data_out, size_t* data_len);
 
-/**
- * Initialize control transfer context (static initialization)
- */
-#define USB_CONTROL_CONTEXT_INIT(dev_desc, cfg_desc, cfg_len)                                      \
-    {                                                                                              \
-        .device_desc = (dev_desc),                                                                 \
-        .config_desc = (cfg_desc),                                                                 \
-        .config_desc_len = (cfg_len),                                                              \
-        .num_configs = 1,                                                                          \
-        .address = 0,                                                                              \
-        .config_value = 0,                                                                         \
-    }
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* USB_CONTROL_H */

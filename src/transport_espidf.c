@@ -231,11 +231,7 @@ static void tcp_destroy(struct usbip_transport* trans)
         {
             close(priv->fd);
         }
-
-        osal_free(priv);
     }
-
-    osal_free(trans);
 }
 
 /*****************************************************************************

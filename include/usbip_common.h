@@ -14,6 +14,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*****************************************************************************
  * USB Standard Definitions (portable, no platform dependency)
  *****************************************************************************/
@@ -252,5 +256,9 @@ struct usb_setup_packet
 #define USB_SETUP_DIR(setup) ((setup)->bmRequestType >> 7)
 #define USB_SETUP_RECIPIENT(setup) ((setup)->bmRequestType & 0x0F)
 #define USB_SETUP_IS_IN(setup) ((setup)->bmRequestType & USB_DIR_IN)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* USB_COMMON_H */

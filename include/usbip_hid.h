@@ -21,6 +21,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*****************************************************************************
  * HID Constants
  *****************************************************************************/
@@ -187,5 +191,9 @@ int hid_handle_out_report(struct hid_device_ctx* ctx, const void* data, size_t l
  */
 int hid_normalize_report_id(struct hid_device_ctx* ctx, const void* input, size_t input_len,
                             void* output, size_t* output_len, uint8_t* report_id);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* VIRTUAL_HID_H */

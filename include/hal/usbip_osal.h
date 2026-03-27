@@ -14,6 +14,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*****************************************************************************
  * OS Abstraction Layer (OSAL)
  *
@@ -94,10 +98,6 @@ const osal_ops_t* osal_get_ops(void);
     {                                                                                              \
         osal_register(#platform, &ops);                                                            \
     }
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /*****************************************************************************
  * Unified Interface Wrapper Functions

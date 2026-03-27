@@ -15,6 +15,10 @@
 #include <stdint.h>
 #include <sys/types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*****************************************************************************
  * Transport Layer Abstraction Interface
  *
@@ -105,10 +109,6 @@ struct usbip_transport
      */
     void (*destroy)(struct usbip_transport* trans);
 };
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /*****************************************************************************
  * Global Transport Management (Internal)

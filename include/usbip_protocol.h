@@ -14,6 +14,10 @@
 #include <stdint.h>
 #include "hal/usbip_transport.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*****************************************************************************
  * USBIP Protocol Constants
  *****************************************************************************/
@@ -268,5 +272,9 @@ int usbip_recv_header(struct usbip_conn_ctx* ctx, struct usbip_header* hdr);
  * Return: 0 on success, negative on failure
  */
 int usbip_send_header(struct usbip_conn_ctx* ctx, struct usbip_header* hdr);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* USBIP_PROTOCOL_H */

@@ -15,6 +15,10 @@
 #include "usbip_devmgr.h"
 #include "usbip_protocol.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*****************************************************************************
  * Server Configuration
  *****************************************************************************/
@@ -74,5 +78,9 @@ void handle_connection(struct usbip_transport* transport, int conn_fd);
  */
 int usbip_urb_loop(struct usbip_conn_ctx* ctx, struct usbip_device_driver* driver,
                    const char* busid);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* USBIP_SERVER_H */

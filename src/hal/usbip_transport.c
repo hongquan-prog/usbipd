@@ -56,6 +56,7 @@ int transport_listen(uint16_t port)
     {
         return -1;
     }
+
     return s_transport->listen(s_transport, port);
 }
 
@@ -65,6 +66,7 @@ struct usbip_conn_ctx* transport_accept(void)
     {
         return NULL;
     }
+
     return s_transport->accept(s_transport);
 }
 
@@ -74,6 +76,7 @@ ssize_t transport_recv(struct usbip_conn_ctx* ctx, void* buf, size_t len)
     {
         return -1;
     }
+
     return s_transport->recv(ctx, buf, len);
 }
 
@@ -83,6 +86,7 @@ ssize_t transport_send(struct usbip_conn_ctx* ctx, const void* buf, size_t len)
     {
         return -1;
     }
+
     return s_transport->send(ctx, buf, len);
 }
 
@@ -92,6 +96,7 @@ void transport_close(struct usbip_conn_ctx* ctx)
     {
         return;
     }
+
     s_transport->close(ctx);
 }
 
@@ -101,5 +106,6 @@ void transport_destroy(void)
     {
         s_transport->destroy(s_transport);
     }
+
     s_transport = NULL;
 }

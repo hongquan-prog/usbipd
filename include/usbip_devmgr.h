@@ -16,6 +16,10 @@
 #include "hal/usbip_transport.h"
 #include "usbip_protocol.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*****************************************************************************
  * Device Driver Abstract Interface
  * Note: Implement this interface to create custom USB devices
@@ -167,5 +171,9 @@ void usbip_set_device_available(const char* busid);
  * Return: 1 busy, 0 available
  */
 int usbip_is_device_busy(const char* busid);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* USBIP_DEVICE_DRIVER_H */
