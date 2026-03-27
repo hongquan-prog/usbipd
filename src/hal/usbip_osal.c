@@ -294,6 +294,18 @@ int osal_thread_detach(struct osal_thread* thread)
     return ret;
 }
 
+int osal_thread_delete(struct osal_thread* thread)
+{
+    const osal_ops_t* ops = osal_get_ops();
+
+    if (!ops || !ops->thread_delete || !thread->handle)
+    {
+        return OSAL_ERROR;
+    }
+
+    return ops->thread_delete(thread->handle);
+}
+
 /*****************************************************************************
  * Time Wrapper Functions
  *****************************************************************************/

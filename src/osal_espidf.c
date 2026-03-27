@@ -296,6 +296,15 @@ static int espidf_thread_detach(void* handle)
     return OSAL_OK;
 }
 
+static int espidf_thread_delete(void* handle)
+{
+    TaskHandle_t task = *(TaskHandle_t*)handle;
+
+    vTaskDelete(task);
+
+    return OSAL_OK;
+}
+
 /*****************************************************************************
  * ESP-IDF Time Implementation
  *****************************************************************************/
@@ -333,6 +342,7 @@ static osal_ops_t espidf_ops = {
     .thread_create = espidf_thread_create,
     .thread_join = espidf_thread_join,
     .thread_detach = espidf_thread_detach,
+    .thread_delete = espidf_thread_delete,
 
     /* Time */
     .get_time_ms = espidf_get_time_ms,

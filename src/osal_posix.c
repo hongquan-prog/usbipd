@@ -149,6 +149,13 @@ static int posix_thread_detach(void* handle)
     return pthread_detach(*(pthread_t*)handle) == 0 ? OSAL_OK : OSAL_ERROR;
 }
 
+static int posix_thread_delete(void* handle)
+{
+    /* POSIX threads don't need explicit deletion */
+    (void)handle;
+    return OSAL_OK;
+}
+
 /*****************************************************************************
  * POSIX Time Implementation
  *****************************************************************************/
@@ -189,6 +196,7 @@ static osal_ops_t posix_ops = {
     .thread_create = posix_thread_create,
     .thread_join = posix_thread_join,
     .thread_detach = posix_thread_detach,
+    .thread_delete = posix_thread_delete,
 
     /* Time */
     .get_time_ms = posix_get_time_ms,

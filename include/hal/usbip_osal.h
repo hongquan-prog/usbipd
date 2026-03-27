@@ -57,6 +57,7 @@ struct osal_ops
                          int priority);
     int (*thread_join)(void* handle);
     int (*thread_detach)(void* handle);
+    int (*thread_delete)(void* handle);
 
     /* Time */
     uint32_t (*get_time_ms)(void);
@@ -216,6 +217,13 @@ int osal_thread_join(struct osal_thread* thread);
  * Return: OSAL_OK on success, error code on failure
  */
 int osal_thread_detach(struct osal_thread* thread);
+
+/**
+ * osal_thread_delete - Delete thread (for FreeRTOS vTaskDelete)
+ * @thread: Thread structure pointer
+ * Return: OSAL_OK on success, error code on failure
+ */
+int osal_thread_delete(struct osal_thread* thread);
 
 /**
  * osal_get_time_ms - Get current time in milliseconds
