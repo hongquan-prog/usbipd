@@ -24,7 +24,7 @@
 #include "usbip_common.h"
 #include "usbip_devmgr.h"
 
-LOG_MODULE_REGISTER(bulk, CONFIG_DAP_LOG_LEVEL);
+LOG_MODULE_REGISTER(bulk, CONFIG_USBIP_LOG_LEVEL);
 
 /*****************************************************************************
  * Configuration

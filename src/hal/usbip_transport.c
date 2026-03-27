@@ -44,6 +44,7 @@ void transport_register(const char* name, struct usbip_transport* trans)
     s_transport = trans;
     strncpy(s_platform_name, name, sizeof(s_platform_name) - 1);
     s_platform_name[sizeof(s_platform_name) - 1] = '\0';
+    LOG_INF("transport_register: platform %s", s_platform_name);
 }
 
 /*****************************************************************************

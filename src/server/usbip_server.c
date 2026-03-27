@@ -16,7 +16,6 @@
 #include <endian.h>
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
 
 #include "hal/usbip_log.h"
 #include "hal/usbip_osal.h"

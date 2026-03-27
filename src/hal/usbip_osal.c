@@ -51,6 +51,7 @@ int osal_register(const char* platform, const osal_ops_t* ops)
     s_osal_ops = ops;
     strncpy(s_platform_name, platform, sizeof(s_platform_name) - 1);
     s_platform_name[sizeof(s_platform_name) - 1] = '\0';
+    LOG_INF("osal_register: platform %s", s_platform_name);
 
     return OSAL_OK;
 }
