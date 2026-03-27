@@ -31,12 +31,12 @@
 
 static void* espidf_malloc(size_t size)
 {
-    return osal_malloc(size);
+    return malloc(size);
 }
 
 static void espidf_free(void* ptr)
 {
-    osal_free(ptr);
+    free(ptr);
 }
 
 /*****************************************************************************
