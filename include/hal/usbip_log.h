@@ -1,10 +1,10 @@
 /*
  * USBIP Log System
  *
- * 参考 Zephyr 日志设计：
- * - 统一的日志宏：LOG_ERR, LOG_WRN, LOG_INF, LOG_DBG
- * - 通过 LOG_MODULE_REGISTER 定义模块 TAG 和日志等级
- * - 支持时间戳输出
+ * Reference Zephyr logging design:
+ * - Unified logging macros: LOG_ERR, LOG_WRN, LOG_INF, LOG_DBG
+ * - Define module TAG and log level via LOG_MODULE_REGISTER
+ * - Support timestamp output
  */
 
 /*
@@ -14,7 +14,7 @@
  *
  * Change Logs:
  * Date           Author       Notes
- * 2026-9-8      hongquan.li   add license declaration
+ * 2026-3-24      hongquan.li   add license declaration
  */
 
 #ifndef USBIP_LOG_H
@@ -29,22 +29,22 @@ extern "C" {
 #endif
 
 /*****************************************************************************
- * 日志颜色定义 (ANSI Escape Codes)
+ * Log color definitions (ANSI Escape Codes)
  *****************************************************************************/
 
-#define LOG_COLOR_NONE "\033[0m"    /* 默认/重置 */
-#define LOG_COLOR_RED "\033[31m"    /* 错误 */
-#define LOG_COLOR_YELLOW "\033[33m" /* 警告 */
-#define LOG_COLOR_GREEN "\033[32m"  /* 通知 */
-#define LOG_COLOR_WHITE "\033[37m"  /* DBG 默认 */
+#define LOG_COLOR_NONE "\033[0m"    /* Default/Reset */
+#define LOG_COLOR_RED "\033[31m"    /* Error */
+#define LOG_COLOR_YELLOW "\033[33m" /* Warning */
+#define LOG_COLOR_GREEN "\033[32m"  /* Info */
+#define LOG_COLOR_WHITE "\033[37m"  /* Debug default */
 
-/* 颜色使能控制 */
+/* Color enable control */
 #ifndef LOG_USE_COLOR
 #    define LOG_USE_COLOR 1
 #endif
 
 /*****************************************************************************
- * 日志等级定义
+ * Log level definitions
  *****************************************************************************/
 
 #define LOG_LEVEL_NONE 0
@@ -53,35 +53,35 @@ extern "C" {
 #define LOG_LEVEL_INF 3
 #define LOG_LEVEL_DBG 4
 
-/* 默认全局日志等级 */
+/* Default global log level */
 #ifndef LOG_GLOBAL_LEVEL
 #    define LOG_GLOBAL_LEVEL LOG_LEVEL_INF
 #endif
 
 /*****************************************************************************
- * 模块注册宏
+ * Module Registration Macro
  *
- * 在源文件开头使用：
+ * Use at the beginning of source file:
  *   LOG_MODULE_REGISTER(my_module, LOG_LEVEL_DBG);
  *
- * 这会定义当前模块的 TAG 和日志等级
+ * This defines the current module's TAG and log level
  *****************************************************************************/
 
 #define LOG_MODULE_REGISTER(name, level)                                                           \
     static const char* const _log_module_name = #name;                                             \
     static const int _log_module_level = level
 
-/* 默认模块注册（如果未注册则使用此默认值） */
+/* Default module registration (used if not registered) */
 #define LOG_MODULE_DEFAULT()                                                                       \
     static const char* const _log_module_name = "default";                                         \
     static const int _log_module_level = LOG_GLOBAL_LEVEL
 
-/* 当前模块的 TAG 和等级（用于日志宏） */
+/* Current module's TAG and level (used by log macros) */
 #define LOG_MODULE_NAME _log_module_name
 #define LOG_MODULE_LEVEL _log_module_level
 
 /*****************************************************************************
- * 日志输出函数（内联实现）
+ * Log output function (inline implementation)
  *****************************************************************************/
 
 static inline void usbip_log_printf(int level, const char* tag, const unsigned char* data,
@@ -96,15 +96,15 @@ static inline void usbip_log_printf(int level, const char* tag, const unsigned c
     const char* level_color;
     FILE* fp;
 
-    /* 获取时间 */
+    /* Get time */
     clock_gettime(CLOCK_REALTIME, &ts);
     now = ts.tv_sec;
     tm_info = localtime(&now);
 
-    /* 格式化时间戳: HH:MM:SS.mmm */
+    /* Format timestamp: HH:MM:SS.mmm */
     strftime(time_buf, sizeof(time_buf), "%H:%M:%S", tm_info);
 
-    /* 等级字符串和颜色 */
+    /* Level string and color */
     switch (level)
     {
         case LOG_LEVEL_ERR:
@@ -134,7 +134,7 @@ static inline void usbip_log_printf(int level, const char* tag, const unsigned c
             break;
     }
 
-    /* 输出格式: [color]HH:MM:SS.mmm [L] [tag] message */
+    /* Output format: [color]HH:MM:SS.mmm [L] [tag] message */
     if (LOG_USE_COLOR)
     {
         fprintf(fp, "%s%s.%03ld %s [%s] ", level_color, time_buf, ts.tv_nsec / 1000000, tag,
@@ -149,7 +149,7 @@ static inline void usbip_log_printf(int level, const char* tag, const unsigned c
     vfprintf(fp, fmt, args);
     va_end(args);
 
-    /* 输出十六进制数据（如果有） */
+    /* Output hex data (if any) */
     if (data && len > 0)
     {
         for (unsigned int i = 0; i < len; i++)
@@ -172,9 +172,9 @@ static inline void usbip_log_printf(int level, const char* tag, const unsigned c
 }
 
 /*****************************************************************************
- * 日志宏
+ * Log macros
  *
- * 使用方式：
+ * Usage:
  *   LOG_MODULE_REGISTER(my_module, LOG_LEVEL_DBG);
  *   LOG_ERR("Error occurred: %d", err);
  *   LOG_DBG("Debug info: %s", str);
@@ -209,7 +209,7 @@ static inline void usbip_log_printf(int level, const char* tag, const unsigned c
     } while (0)
 
 /*****************************************************************************
- * 原始日志宏（用于特殊情况，直接指定 TAG）
+ * Raw log macros (for special cases, specify TAG directly)
  *****************************************************************************/
 
 #define LOG_RAW_ERR(tag, fmt, ...) usbip_log_printf(LOG_LEVEL_ERR, tag, NULL, 0, fmt, ##__VA_ARGS__)
@@ -221,9 +221,9 @@ static inline void usbip_log_printf(int level, const char* tag, const unsigned c
 #define LOG_RAW_DBG(tag, fmt, ...) usbip_log_printf(LOG_LEVEL_DBG, tag, NULL, 0, fmt, ##__VA_ARGS__)
 
 /*****************************************************************************
- * 十六进制日志宏
+ * Hex dump log macros
  *
- * 使用方式：
+ * Usage:
  *   LOG_HEX_DBG("Data: ", data, len);
  *****************************************************************************/
 

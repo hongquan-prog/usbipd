@@ -5,13 +5,13 @@
  *
  * Change Logs:
  * Date           Author       Notes
- * 2026-9-8      hongquan.li   add license declaration
+ * 2026-3-24      hongquan.li   add license declaration
  */
 
 /*****************************************************************************
  * USBIP Protocol Layer Implementation
  *
- * 实现协议编解码和收发功能
+ * Implement protocol encoding/decoding and send/receive functions
  *****************************************************************************/
 
 #include "usbip_protocol.h"
@@ -22,21 +22,21 @@
 #include "hal/usbip_transport.h"
 
 /*****************************************************************************
- * 字节序转换函数
+ * Byte Order Conversion Functions
  *****************************************************************************/
 
 void usbip_pack_op_common(struct op_common* op, int to_network)
 {
     if (to_network)
     {
-        /* 主机序转网络序 */
+        /* Host order to network order */
         op->version = htobe16(op->version);
         op->code = htobe16(op->code);
         op->status = htobe32(op->status);
     }
     else
     {
-        /* 网络序转主机序 */
+        /* Network order to host order */
         op->version = be16toh(op->version);
         op->code = be16toh(op->code);
         op->status = be32toh(op->status);
@@ -67,7 +67,7 @@ void usbip_pack_usb_device(struct usbip_usb_device* udev, int to_network)
 
 void usbip_pack_usb_interface(struct usbip_usb_interface* uinf, int to_network)
 {
-    /* 接口描述符都是 uint8_t，无需字节序转换 */
+    /* Interface descriptors are all uint8_t, no byte order conversion needed */
     (void)uinf;
     (void)to_network;
 }
@@ -76,7 +76,7 @@ void usbip_pack_header(struct usbip_header* hdr, int to_network)
 {
     if (to_network)
     {
-        uint32_t cmd = hdr->base.command; /* 保存原始命令值 */
+        uint32_t cmd = hdr->base.command; /* Save original command value */
 
         hdr->base.command = htobe32(hdr->base.command);
         hdr->base.seqnum = htobe32(hdr->base.seqnum);
@@ -145,7 +145,7 @@ void usbip_pack_header(struct usbip_header* hdr, int to_network)
 }
 
 /*****************************************************************************
- * 协议收发接口
+ * Protocol Send/Receive Interface
  *****************************************************************************/
 
 int usbip_recv_op_common(struct usbip_conn_ctx* ctx, struct op_common* op)
@@ -158,7 +158,7 @@ int usbip_recv_op_common(struct usbip_conn_ctx* ctx, struct op_common* op)
         return -1;
     }
 
-    usbip_pack_op_common(op, 0); /* 网络序转主机序 */
+    usbip_pack_op_common(op, 0); /* Network order to host order */
     return 0;
 }
 
@@ -167,7 +167,7 @@ int usbip_send_op_common(struct usbip_conn_ctx* ctx, uint16_t code, uint32_t sta
     struct op_common op = {.version = USBIP_VERSION, .code = code, .status = status};
     ssize_t n;
 
-    usbip_pack_op_common(&op, 1); /* 主机序转网络序 */
+    usbip_pack_op_common(&op, 1); /* Host order to network order */
 
     n = transport_send(ctx, &op, sizeof(op));
     if (n != sizeof(op))
@@ -195,7 +195,7 @@ int usbip_send_header(struct usbip_conn_ctx* ctx, struct usbip_header* hdr)
 {
     ssize_t n;
 
-    /* 先转换为网络序 */
+    /* Convert to network byte order first */
     usbip_pack_header(hdr, 1);
     n = transport_send(ctx, hdr, sizeof(*hdr));
     if (n != sizeof(*hdr))

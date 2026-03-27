@@ -5,26 +5,26 @@
  *
  * Change Logs:
  * Date           Author       Notes
- * 2026-9-8      hongquan.li   add license declaration
+ * 2026-3-24      hongquan.li   add license declaration
  */
 
 /*
- * Virtual HID Base - HID 通用框架实现
+ * Virtual HID Base - HID Generic Framework Implementation
  *
- * 提供 HID 设备通用的请求处理
+ * Provides common HID device request handling
  */
 
 #include "usbip_hid.h"
-#include <stdlib.h>
 #include <string.h>
 #include "hal/usbip_log.h"
+#include "hal/usbip_osal.h"
 #include "usbip_common.h"
 #include "usbip_hid.h"
 
 LOG_MODULE_REGISTER(hid, CONFIG_HID_LOG_LEVEL);
 
 /**************************************************************************
- * HID 上下文初始化
+ * HID Context Initialization
  **************************************************************************/
 
 void hid_init_ctx(struct hid_device_ctx* ctx, const struct hid_device_ops* ops, uint8_t report_size,
@@ -39,27 +39,27 @@ void hid_init_ctx(struct hid_device_ctx* ctx, const struct hid_device_ops* ops, 
 }
 
 /**************************************************************************
- * Report ID 规范化处理
+ * Report ID Normalization Processing
  *
- * HID 规范关于 Report ID 的说明：
+ * HID Specification on Report ID:
  *
- * 1. Report ID 是可选的
- *    - 如果报告描述符中没有 Report ID 项，则不使用 Report ID
- *    - 如果使用 Report ID，取值范围必须是 1-255 (0x01-0xFF)
- *    - 0x00 是保留值，表示"没有 Report ID"
+ * 1. Report ID is optional
+ *    - If no Report ID item in report descriptor, Report ID is not used
+ *    - If Report ID is used, value range must be 1-255 (0x01-0xFF)
+ *    - 0x00 is reserved, means "no Report ID"
  *
- * 2. 数据包格式：
- *    - 无 Report ID: [数据 0][数据 1]...[数据 n-1] (n = 报告大小)
- *    - 有 Report ID: [Report ID][数据 0]...[数据 n-2] (n = 报告大小)
+ * 2. Data packet format:
+ *    - Without Report ID: [Data 0][Data 1]...[Data n-1] (n = report size)
+ *    - With Report ID: [Report ID][Data 0]...[Data n-2] (n = report size)
  *
- * 3. Linux hidraw 驱动的行为：
- *    - 只有当报告描述符中确实定义了 Report ID 时才会处理 Report ID
- *    - 对于无 Report ID 的设备，hidraw 原样传输数据，不添加/删除任何字节
- *    - hidraw 不会自动添加或删除 0x00
+ * 3. Linux hidraw driver behavior:
+ *    - Only processes Report ID when defined in report descriptor
+ *    - For devices without Report ID, hidraw transmits data as-is
+ *    - hidraw does not add or remove 0x00 automatically
  *
- * 本项目中的设备情况：
- *    - CMSIS-DAP: 报告描述符无 Report ID，报告大小 64 字节
- *    - 处理方式：原样传递，不添加/剥离任何字节
+ * Devices in this project:
+ *    - CMSIS-DAP: no Report ID in report descriptor, 64-byte report size
+ *    - Handling: pass through as-is, no add/strip
  **************************************************************************/
 int hid_normalize_report_id(struct hid_device_ctx* ctx, const void* input, size_t input_len,
                             void* output, size_t* output_len, uint8_t* report_id)
@@ -78,8 +78,8 @@ int hid_normalize_report_id(struct hid_device_ctx* ctx, const void* input, size_
     report_size = ctx->report_size ? ctx->report_size : HID_DEFAULT_REPORT_SIZE;
 
     /*
-     * report_id = 0 表示没有 Report ID
-     * 根据 HID 规范，0x00 是保留值，不应该用作实际的 Report ID
+     * report_id = 0 means no Report ID
+     * According to HID spec, 0x00 is reserved and should not be used as actual Report ID
      */
     *report_id = 0;
 
@@ -87,8 +87,8 @@ int hid_normalize_report_id(struct hid_device_ctx* ctx, const void* input, size_
     {
         case HID_REPORT_ID_NONE:
             /*
-             * 不处理，原样复制
-             * 适用于：确定不需要 Report ID 处理的情况
+             * No processing, copy as-is
+             * For: cases where no Report ID handling is needed
              */
             memcpy(dst, src, input_len);
             *output_len = input_len;
@@ -96,12 +96,12 @@ int hid_normalize_report_id(struct hid_device_ctx* ctx, const void* input, size_
 
         case HID_REPORT_ID_STRIP:
             /*
-             * 总是去掉第一个字节作为 Report ID
-             * 适用于：报告描述符确实定义了 Report ID 的设备
+             * Always strip first byte as Report ID
+             * For: devices where report descriptor defines Report ID
              *
-             * 注意：
-             * - Report ID 应该是 1-255
-             * - 0x00 在此模式下也被当作 Report ID 处理（虽然不符合规范）
+             * Note:
+             * - Report ID should be 1-255
+             * - 0x00 is also treated as Report ID in this mode (non-compliant)
              */
             if (input_len > 1)
             {
@@ -122,24 +122,24 @@ int hid_normalize_report_id(struct hid_device_ctx* ctx, const void* input, size_
 
         case HID_REPORT_ID_PREPEND:
             /*
-             * 总是添加 Report ID
+             * Always prepend Report ID
              *
-             * 注意：
-             * - 此模式保留用于向后兼容
-             * - 根据 HID 规范，不应该使用 0x00 作为 Report ID
-             * - 如果需要 Report ID，应该使用 1-255 范围内的值
+             * Note:
+             * - This mode is reserved for backward compatibility
+             * - According to HID spec, 0x00 should not be used as Report ID
+             * - If Report ID is needed, use value in 1-255 range
              */
             if (report_size < 2)
             {
-                /* 报告大小太小，无法添加 Report ID */
+                /* Report size too small to add Report ID */
                 memcpy(dst, src, input_len < report_size ? input_len : report_size);
                 *output_len = input_len < report_size ? input_len : report_size;
             }
             else
             {
                 /*
-                 * 使用 Report ID 0x00（虽然不符合规范，但保留用于兼容性）
-                 * 新代码应该考虑使用 1-255 范围内的 Report ID
+                 * Use Report ID 0x00 (non-compliant but reserved for compatibility)
+                 * New code should consider using Report ID in 1-255 range
                  */
                 dst[0] = 0x00;
                 size_t copy_len = (input_len < report_size - 1) ? input_len : (report_size - 1);
@@ -152,33 +152,33 @@ int hid_normalize_report_id(struct hid_device_ctx* ctx, const void* input, size_
         case HID_REPORT_ID_AUTO:
         default:
             /*
-             * 自动检测模式 - 针对本项目的 CMSIS-DAP 设备优化
+             * Auto-detect mode - optimized for CMSIS-DAP devices in this project
              *
-             * CMSIS-DAP 设备特点：
-             * - 报告描述符中没有 Report ID 定义
-             * - 报告大小 = 64 字节
-             * - 数据格式：[CMD][DATA...]，CMD 范围 0x00-0x7F
+             * CMSIS-DAP device characteristics:
+             * - No Report ID definition in report descriptor
+             * - Report size = 64 bytes
+             * - Data format: [CMD][DATA...], CMD range 0x00-0x7F
              *
-             * 处理策略：
-             * 1. 如果 input_len == report_size (64)：
-             *    - 这是正常情况，原样传递
-             *    - 第一个字节是 CMSIS-DAP 命令，不是 Report ID
+             * Processing strategy:
+             * 1. If input_len == report_size (64):
+             *    - This is normal case, pass through as-is
+             *    - First byte is CMSIS-DAP command, not Report ID
              *
-             * 2. 如果 input_len == report_size - 1 (63)：
-             *    - 可能是某些驱动剥离了数据
-             *    - 原样传递，不补 0x00（因为 0x00 不是有效的 Report ID）
+             * 2. If input_len == report_size - 1 (63):
+             *    - Some drivers may have stripped data
+             *    - Pass through as-is, no padding 0x00 (because 0x00 is not valid Report ID)
              *
-             * 3. 其他情况：原样传递
+             * 3. Other cases: pass through as-is
              *
-             * 注意：不再使用启发式判断（src[0] > 0x1F），因为：
-             * - 这不符合 HID 规范
-             * - CMSIS-DAP 命令可以是 0x00-0x7F 范围内的任意值
+             * Note: No longer use heuristic (src[0] > 0x1F) because:
+             * - This violates HID specification
+             * - CMSIS-DAP commands can be any value in 0x00-0x7F range
              */
             if (input_len == report_size)
             {
                 /*
-                 * 正常情况：完整的 64 字节报告
-                 * CMSIS-DAP 无 Report ID，原样传递
+                 * Normal case: full 64-byte report
+                 * CMSIS-DAP has no Report ID, pass through as-is
                  */
                 memcpy(dst, src, input_len);
                 *output_len = input_len;
@@ -187,8 +187,8 @@ int hid_normalize_report_id(struct hid_device_ctx* ctx, const void* input, size_
             else if (input_len == report_size - 1)
             {
                 /* 
-                 * 某些 Windows HID 驱动可能发送 63 字节
-                 * 原样传递，末尾补 0 确保 DAP 不读到脏数据
+                 * Some Windows HID drivers may send 63 bytes
+                 * Pass through as-is, pad with 0 at end to ensure DAP doesn't read garbage
                  */
                 memcpy(dst, src, input_len);
                 dst[input_len] = 0x00;
@@ -198,7 +198,7 @@ int hid_normalize_report_id(struct hid_device_ctx* ctx, const void* input, size_
             }
             else
             {
-                /* 其他情况，原样复制 */
+                /* Other cases, copy as-is */
                 memcpy(dst, src, input_len);
                 *output_len = input_len;
                 *report_id = 0;
@@ -210,7 +210,7 @@ int hid_normalize_report_id(struct hid_device_ctx* ctx, const void* input, size_
 }
 
 /**************************************************************************
- * HID OUT 报告处理
+ * HID OUT Report Handling
  **************************************************************************/
 
 int hid_handle_out_report(struct hid_device_ctx* ctx, const void* data, size_t len)
@@ -225,19 +225,19 @@ int hid_handle_out_report(struct hid_device_ctx* ctx, const void* data, size_t l
         return -1;
     }
 
-    /* 规范化 Report ID */
+    /* Normalize Report ID */
     ret = hid_normalize_report_id(ctx, data, len, buf, &out_len, &report_id);
     if (ret < 0)
     {
         return ret;
     }
 
-    /* 调用设备特定的处理函数 */
+    /* Call device-specific handler */
     return ctx->ops->handle_data(report_id, buf, out_len, ctx->user_data);
 }
 
 /**************************************************************************
- * HID 类请求处理
+ * HID Class Request Handling
  **************************************************************************/
 
 int hid_class_request_handler(struct hid_device_ctx* ctx, const void* setup, void** data_out,
@@ -263,7 +263,7 @@ int hid_class_request_handler(struct hid_device_ctx* ctx, const void* setup, voi
             report_type = (req->wValue >> 8) & 0xFF;
             report_id = req->wValue & 0xFF;
 
-            buf = malloc(report_size);
+            buf = osal_malloc(report_size);
             if (!buf)
             {
                 return -1;
@@ -275,7 +275,7 @@ int hid_class_request_handler(struct hid_device_ctx* ctx, const void* setup, voi
                 ret = ops->get_report(report_type, report_id, buf, data_len, ctx->user_data);
                 if (ret < 0)
                 {
-                    free(buf);
+                    osal_free(buf);
                     return -1;
                 }
             }
@@ -290,7 +290,7 @@ int hid_class_request_handler(struct hid_device_ctx* ctx, const void* setup, voi
         case HID_REQUEST_GET_IDLE:
             report_id = req->wValue & 0xFF;
 
-            buf = malloc(1);
+            buf = osal_malloc(1);
             if (!buf)
             {
                 return -1;
@@ -311,7 +311,7 @@ int hid_class_request_handler(struct hid_device_ctx* ctx, const void* setup, voi
             return 0;
 
         case HID_REQUEST_GET_PROTOCOL:
-            buf = malloc(1);
+            buf = osal_malloc(1);
             if (!buf)
             {
                 return -1;
@@ -332,7 +332,7 @@ int hid_class_request_handler(struct hid_device_ctx* ctx, const void* setup, voi
             return 0;
 
         case HID_REQUEST_SET_REPORT:
-            /* 数据在 OUT 阶段传输 */
+            /* Data transferred in OUT stage */
             return 0;
 
         case HID_REQUEST_SET_IDLE:

@@ -64,8 +64,8 @@
 │  │        设备驱动层 (Device Driver Layer)          │   │
 │  │  - hid_dap.c (CMSIS-DAP v1 HID)           │   │
 │  │  - bulk_dap.c (CMSIS-DAP v2 Bulk)     │   │
-│  │  - virtual_hid.c (HID 基类)               │   │
-│  │  - virtual_bulk.c (Bulk 基类)              │   │
+│  │  - usbip_hid.c (HID 基类)               │   │
+│  │  - usbip_bulk.c (Bulk 基类)              │   │
 │  └──────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -757,7 +757,7 @@ static void __attribute__((constructor)) xxx_transport_register(void)
 
 ### 添加新的设备驱动
 
-1. 创建设备驱动文件 `src/device/virtual_xxx.c`:
+1. 创建设备驱动文件 `src/device/usbip_xxx.c`:
 
 ```c
 #include "usbip_devmgr.h"
@@ -770,12 +770,21 @@ static struct usbip_usb_device xxx_device = {
     /* ... */
 };
 
-static int xxx_get_device_list(struct usbip_device_driver* driver,
-                              struct usbip_usb_device** devices, int* count)
+static int xxx_get_device_count(struct usbip_device_driver* driver)
 {
-    *devices = malloc(sizeof(xxx_device));
-    memcpy(*devices, &xxx_device, sizeof(xxx_device));
-    *count = 1;
+    (void)driver;
+    return 1;
+}
+
+static int xxx_get_device_by_index(struct usbip_device_driver* driver, int index,
+                                   struct usbip_usb_device* device)
+{
+    (void)driver;
+    if (index != 0)
+    {
+        return -1;
+    }
+    memcpy(device, &xxx_device, sizeof(*device));
     return 0;
 }
 
@@ -831,7 +840,8 @@ static void xxx_cleanup(struct usbip_device_driver* driver)
 
 struct usbip_device_driver virtual_xxx_driver = {
     .name = "virtual_xxx",
-    .get_device_list = xxx_get_device_list,
+    .get_device_count = xxx_get_device_count,
+    .get_device_by_index = xxx_get_device_by_index,
     .get_device = xxx_get_device,
     .export_device = xxx_export_device,
     .unexport_device = xxx_unexport_device,
@@ -856,11 +866,11 @@ usbip_register_driver(&virtual_xxx_driver);
 
 2. **URB 数据缓冲区**:
    - 驱动分配 `data_out`，框架释放
-   - 使用 `malloc()` 分配，`free()` 释放
+   - 使用 `osal_malloc()` 分配，`osal_free()` 释放
 
 3. **设备列表**:
    - 驱动分配设备数组，框架释放
-   - 使用 `malloc()` / `realloc()` 分配，`free()` 释放
+   - 使用 `osal_malloc()` / `realloc()` 分配，`osal_free()` 释放
 
 ### 线程安全
 

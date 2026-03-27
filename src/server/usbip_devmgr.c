@@ -5,25 +5,24 @@
  *
  * Change Logs:
  * Date           Author       Notes
- * 2026-9-8      hongquan.li   add license declaration
+ * 2026-3-24      hongquan.li   add license declaration
  */
 
 /*****************************************************************************
  * USBIP Device Manager
  *
- * USBIP 协议层的设备管理：驱动注册、设备导入/导出状态
+ * Device management at USBIP protocol layer: driver registration, device import/export state
  *****************************************************************************/
 
 #include "usbip_devmgr.h"
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include "hal/usbip_log.h"
 
 LOG_MODULE_REGISTER(devmgr, CONFIG_DEVMGR_LOG_LEVEL);
 
 /*****************************************************************************
- * 驱动注册表
+ * Driver Registry
  *****************************************************************************/
 
 #define MAX_DRIVERS 16
@@ -32,7 +31,7 @@ static struct usbip_device_driver* driver_registry[MAX_DRIVERS];
 static int driver_count = 0;
 
 /*****************************************************************************
- * 设备忙碌状态表（USBIP 导入/导出协议）
+ * Device busy status table (USBIP import/export protocol)
  *****************************************************************************/
 
 #define MAX_BUSY_DEVICES 32
@@ -44,12 +43,12 @@ static struct
 } busy_devices[MAX_BUSY_DEVICES];
 
 /*****************************************************************************
- * 静态函数声明
+ * Static Function Declarations
  *****************************************************************************/
-/* 本模块无静态函数，所有函数均为公开接口 */
+/* No static functions in this module, all functions are public interfaces */
 
 /*****************************************************************************
- * 驱动注册接口
+ * Driver Registration Interface
  *****************************************************************************/
 
 int usbip_register_driver(struct usbip_device_driver* driver)
@@ -60,7 +59,7 @@ int usbip_register_driver(struct usbip_device_driver* driver)
         return -1;
     }
 
-    /* 检查是否已注册 */
+    /* Check if already registered */
     for (int i = 0; i < driver_count; i++)
     {
         if (driver_registry[i] == driver)
@@ -72,7 +71,7 @@ int usbip_register_driver(struct usbip_device_driver* driver)
 
     driver_registry[driver_count++] = driver;
 
-    /* 调用驱动初始化 */
+    /* Call driver initialization */
     if (driver->init && driver->init(driver) < 0)
     {
         LOG_ERR("Driver init failed: %s", driver->name);
@@ -91,12 +90,12 @@ void usbip_unregister_driver(struct usbip_device_driver* driver)
     {
         if (driver_registry[i] == driver)
         {
-            /* 调用驱动清理 */
+            /* Call driver cleanup */
             if (driver->cleanup)
             {
                 driver->cleanup(driver);
             }
-            /* 移动后面的驱动 */
+            /* Move subsequent drivers */
             for (int j = i; j < driver_count - 1; j++)
             {
                 driver_registry[j] = driver_registry[j + 1];
@@ -109,7 +108,7 @@ void usbip_unregister_driver(struct usbip_device_driver* driver)
 }
 
 /*****************************************************************************
- * 驱动迭代接口
+ * Driver Iteration Interface
  *****************************************************************************/
 
 struct usbip_device_driver* usbip_get_first_driver(void)
@@ -134,12 +133,12 @@ struct usbip_device_driver* usbip_get_next_driver(struct usbip_device_driver* cu
 }
 
 /*****************************************************************************
- * 设备忙碌状态管理
+ * Device Busy Status Management
  *****************************************************************************/
 
 void usbip_set_device_busy(const char* busid)
 {
-    /* 查找现有条目 */
+    /* Find existing entry */
     for (int i = 0; i < MAX_BUSY_DEVICES; i++)
     {
         if (strcmp(busy_devices[i].busid, busid) == 0)
@@ -148,7 +147,7 @@ void usbip_set_device_busy(const char* busid)
             return;
         }
     }
-    /* 创建新条目 */
+    /* Create new entry */
     for (int i = 0; i < MAX_BUSY_DEVICES; i++)
     {
         if (busy_devices[i].busid[0] == '\0')

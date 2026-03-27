@@ -5,14 +5,14 @@
  *
  * Change Logs:
  * Date           Author       Notes
- * 2026-9-8      hongquan.li   add license declaration
+ * 2026-3-24      hongquan.li   add license declaration
  */
 
 /*
- * Virtual HID Base - HID 通用框架
+ * Virtual HID Base - HID Generic Framework
  *
- * 提供 HID 设备通用的请求处理和数据管理
- * 可被不同的 HID 设备实现复用
+ * Provides common HID device request handling and data management
+ * Can be reused by different HID device implementations
  */
 
 #ifndef VIRTUAL_HID_H
@@ -22,10 +22,10 @@
 #include <stdint.h>
 
 /*****************************************************************************
- * HID 常量定义
+ * HID Constants
  *****************************************************************************/
 
-/* HID 类请求码 */
+/* HID Class Request Codes */
 #define HID_REQUEST_GET_REPORT 0x01
 #define HID_REQUEST_GET_IDLE 0x02
 #define HID_REQUEST_GET_PROTOCOL 0x03
@@ -33,95 +33,95 @@
 #define HID_REQUEST_SET_IDLE 0x0A
 #define HID_REQUEST_SET_PROTOCOL 0x0B
 
-/* HID 协议模式 */
+/* HID Protocol Modes */
 #define HID_PROTOCOL_BOOT 0x00
 #define HID_PROTOCOL_REPORT 0x01
 
-/* HID 报告类型 */
+/* HID Report Types */
 #define HID_REPORT_TYPE_INPUT 0x01
 #define HID_REPORT_TYPE_OUTPUT 0x02
 #define HID_REPORT_TYPE_FEATURE 0x03
 
-/* 默认报告大小 */
+/* Default Report Size */
 #define HID_DEFAULT_REPORT_SIZE 64
 
 /*****************************************************************************
- * Report ID 处理选项
+ * Report ID Handling Options
  *
- * HID 规范关于 Report ID 的说明：
+ * HID Specification on Report ID:
  *
- * 1. Report ID 是可选的
- *    - 如果报告描述符中没有 Report ID 项，则不使用 Report ID
- *    - 如果使用 Report ID，取值范围必须是 1-255 (0x01-0xFF)
- *    - 0x00 是保留值，表示"没有 Report ID"
+ * 1. Report ID is optional
+ *    - If no Report ID item in report descriptor, Report ID is not used
+ *    - If Report ID is used, value range must be 1-255 (0x01-0xFF)
+ *    - 0x00 is reserved, means "no Report ID"
  *
- * 2. Linux hidraw 驱动的行为：
- *    - 只有当报告描述符中确实定义了 Report ID 时才会处理 Report ID
- *    - 对于无 Report ID 的设备，hidraw 原样传输数据，不添加/删除任何字节
- *    - hidraw 不会自动添加或删除 0x00
+ * 2. Linux hidraw driver behavior:
+ *    - Only processes Report ID when defined in report descriptor
+ *    - For devices without Report ID, hidraw transmits data as-is
+ *    - hidraw does not add or remove 0x00 automatically
  *
- * 本项目中的设备情况：
- *    - CMSIS-DAP: 报告描述符无 Report ID，报告大小 64 字节
- *    - 处理方式：原样传递，不添加/剥离任何字节
+ * 3. Devices in this project:
+ *    - CMSIS-DAP: no Report ID in report descriptor, 64-byte report size
+ *    - Handling: pass through as-is, no add/strip
  *****************************************************************************/
 
-/* Report ID 处理模式 */
-#define HID_REPORT_ID_NONE 0x00    /* 不处理，原样传递 */
-#define HID_REPORT_ID_AUTO 0x01    /* 自动检测（针对 CMSIS-DAP 优化） */
-#define HID_REPORT_ID_STRIP 0x02   /* 总是去掉第一个字节作为 Report ID */
-#define HID_REPORT_ID_PREPEND 0x03 /* 总是添加 Report ID（兼容性模式） */
+/* Report ID Handling Modes */
+#define HID_REPORT_ID_NONE 0x00    /* No processing, pass through */
+#define HID_REPORT_ID_AUTO 0x01    /* Auto detect (optimized for CMSIS-DAP) */
+#define HID_REPORT_ID_STRIP 0x02   /* Always strip first byte as Report ID */
+#define HID_REPORT_ID_PREPEND 0x03 /* Always prepend Report ID (compat mode) */
 
 /*****************************************************************************
- * HID 设备回调接口
+ * HID Device Callback Interface
  *****************************************************************************/
 
 struct hid_device_ops
 {
     /**
-     * handle_data - 处理 HID OUT 数据
-     * @report_id: 报告 ID（已处理）
-     * @data: 数据（已去掉 Report ID）
-     * @len: 数据长度
-     * @user_data: 用户数据指针
-     * Return: 0 成功，负数失败
+     * handle_data - Handle HID OUT data
+     * @report_id: Report ID (already processed)
+     * @data: Data (Report ID stripped)
+     * @len: Data length
+     * @user_data: User data pointer
+     * Return: 0 on success, negative on failure
      */
     int (*handle_data)(uint8_t report_id, const void* data, size_t len, void* user_data);
 
     /**
-     * get_report - 获取 HID 报告
-     * @report_type: 报告类型 (INPUT/OUTPUT/FEATURE)
-     * @report_id: 报告 ID
-     * @data: 输出数据缓冲区
-     * @len: 输出数据长度
-     * @user_data: 用户数据指针
-     * Return: 0 成功，负数失败
+     * get_report - Get HID report
+     * @report_type: Report type (INPUT/OUTPUT/FEATURE)
+     * @report_id: Report ID
+     * @data: Output data buffer
+     * @len: Output data length
+     * @user_data: User data pointer
+     * Return: 0 on success, negative on failure
      */
     int (*get_report)(uint8_t report_type, uint8_t report_id, void* data, size_t* len,
                       void* user_data);
 
     /**
-     * get_idle - 获取空闲速率
+     * get_idle - Get idle rate
      */
     int (*get_idle)(uint8_t report_id, uint8_t* duration, void* user_data);
 
     /**
-     * set_idle - 设置空闲速率
+     * set_idle - Set idle rate
      */
     int (*set_idle)(uint8_t report_id, uint8_t duration, void* user_data);
 
     /**
-     * get_protocol - 获取当前协议
+     * get_protocol - Get current protocol
      */
     int (*get_protocol)(uint8_t* protocol, void* user_data);
 
     /**
-     * set_protocol - 设置协议
+     * set_protocol - Set protocol
      */
     int (*set_protocol)(uint8_t protocol, void* user_data);
 };
 
 /*****************************************************************************
- * HID 设备上下文
+ * HID Device Context
  *****************************************************************************/
 
 struct hid_device_ctx
@@ -135,55 +135,55 @@ struct hid_device_ctx
 };
 
 /*****************************************************************************
- * HID 通用函数接口
+ * HID Common Function Interface
  *****************************************************************************/
 
 /**
- * hid_init_ctx - 初始化 HID 设备上下文
- * @ctx: HID 设备上下文
- * @ops: 设备操作回调
- * @report_size: 报告大小
- * @user_data: 用户数据指针
+ * hid_init_ctx - Initialize HID device context
+ * @ctx: HID device context
+ * @ops: Device operation callbacks
+ * @report_size: Report size
+ * @user_data: User data pointer
  */
 void hid_init_ctx(struct hid_device_ctx* ctx, const struct hid_device_ops* ops, uint8_t report_size,
                   void* user_data);
 
 /**
- * hid_class_request_handler - HID 类请求处理器
+ * hid_class_request_handler - HID class request handler
  */
 int hid_class_request_handler(struct hid_device_ctx* ctx, const void* setup, void** data_out,
                               size_t* data_len);
 
 /**
- * hid_handle_out_report - 处理 HID OUT 报告
- * @ctx: HID 设备上下文
- * @data: 原始数据（可能包含 Report ID）
- * @len: 数据长度
+ * hid_handle_out_report - Handle HID OUT report
+ * @ctx: HID device context
+ * @data: Raw data (may contain Report ID)
+ * @len: Data length
  *
- * 自动处理 Report ID，然后调用 handle_data 回调
+ * Automatically process Report ID, then call handle_data callback
  */
 int hid_handle_out_report(struct hid_device_ctx* ctx, const void* data, size_t len);
 
 /**
- * hid_normalize_report_id - 规范化 Report ID
- * @ctx: HID 设备上下文
- * @input: 输入数据
- * @input_len: 输入数据长度
- * @output: 输出数据缓冲区
- * @output_len: 输出数据长度指针
- * @report_id: 输出 Report ID (0 = 无 Report ID)
- * Return: 0 成功，负数失败
+ * hid_normalize_report_id - Normalize Report ID
+ * @ctx: HID device context
+ * @input: Input data
+ * @input_len: Input data length
+ * @output: Output data buffer
+ * @output_len: Output data length pointer
+ * @report_id: Output Report ID (0 = no Report ID)
+ * Return: 0 on success, negative on failure
  *
- * 根据 HID 规范处理 Report ID：
- * - Report ID 取值范围：1-255 (0x01-0xFF)
- * - 0x00 是保留值，表示"没有 Report ID"
- * - CMSIS-DAP 设备无 Report ID，原样传递 64 字节数据
+ * Process Report ID according to HID specification:
+ * - Report ID value range: 1-255 (0x01-0xFF)
+ * - 0x00 is reserved, means "no Report ID"
+ * - CMSIS-DAP devices have no Report ID, pass 64-byte data as-is
  *
- * 各模式说明：
- * - HID_REPORT_ID_NONE: 原样传递，不处理
- * - HID_REPORT_ID_AUTO: 针对 CMSIS-DAP 优化，原样传递 64 字节数据
- * - HID_REPORT_ID_STRIP: 去掉第一个字节作为 Report ID
- * - HID_REPORT_ID_PREPEND: 添加 Report ID 0x00（向后兼容）
+ * Mode descriptions:
+ * - HID_REPORT_ID_NONE: Pass through, no processing
+ * - HID_REPORT_ID_AUTO: Optimized for CMSIS-DAP, pass 64-byte data as-is
+ * - HID_REPORT_ID_STRIP: Strip first byte as Report ID
+ * - HID_REPORT_ID_PREPEND: Prepend Report ID 0x00 (backward compat)
  */
 int hid_normalize_report_id(struct hid_device_ctx* ctx, const void* input, size_t input_len,
                             void* output, size_t* output_len, uint8_t* report_id);

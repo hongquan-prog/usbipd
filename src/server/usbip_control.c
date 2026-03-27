@@ -5,29 +5,29 @@
  *
  * Change Logs:
  * Date           Author       Notes
- * 2026-9-8      hongquan.li   add license declaration
+ * 2026-3-24      hongquan.li   add license declaration
  */
 
 /*****************************************************************************
  * USB Standard Control Transfer Framework
  *
- * 提供标准 USB 控制传输的通用处理框架
- * 可被各设备驱动复用，减少代码重复
+ * Provides a generic framework for standard USB control transfers
+ * Can be reused by device drivers to reduce code duplication
  *****************************************************************************/
 
 #include <errno.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "hal/usbip_log.h"
+#include "hal/usbip_osal.h"
 #include "usbip_common.h"
 #include "usbip_control.h"
 
 LOG_MODULE_REGISTER(control, CONFIG_CONTROL_LOG_LEVEL);
 
 /*****************************************************************************
- * 默认字符串描述符
+ * Default String Descriptors
  *****************************************************************************/
 
 static const uint8_t default_string0[] = {
@@ -35,7 +35,7 @@ static const uint8_t default_string0[] = {
 };
 
 /*****************************************************************************
- * 控制传输处理
+ * Control Transfer Handling
  *****************************************************************************/
 
 int usb_control_handle_setup(const struct usb_setup_packet* setup, struct usb_control_context* ctx,
@@ -53,7 +53,7 @@ int usb_control_handle_setup(const struct usb_setup_packet* setup, struct usb_co
 
     uint8_t type = USB_SETUP_TYPE(setup);
 
-    /* 标准设备请求 */
+    /* Standard device requests */
     if (type == USB_TYPE_STANDARD)
     {
         switch (setup->bRequest)
@@ -71,7 +71,7 @@ int usb_control_handle_setup(const struct usb_setup_packet* setup, struct usb_co
                 break;
 
             case USB_REQ_SET_ADDRESS:
-                /* 虚拟设备通常忽略地址设置 */
+                /* Virtual devices typically ignore address setting */
                 ctx->address = setup->wValue & 0xFF;
                 ret = USB_CONTROL_OK_NO_DATA;
                 break;
@@ -82,19 +82,19 @@ int usb_control_handle_setup(const struct usb_setup_packet* setup, struct usb_co
 
             case USB_REQ_SET_FEATURE:
             case USB_REQ_CLEAR_FEATURE:
-                /* 虚拟设备通常不支持远程唤醒或端点暂停 */
+                /* Virtual devices typically don't support remote wakeup or endpoint halt */
                 ret = USB_CONTROL_OK_NO_DATA;
                 break;
 
             case USB_REQ_SET_INTERFACE:
-                /* 默认支持，无实际操作 */
+                /* Default support, no actual operation */
                 ctx->alt_setting[setup->wIndex & 0xFF] = setup->wValue & 0xFF;
                 ret = USB_CONTROL_OK_NO_DATA;
                 break;
 
             case USB_REQ_GET_INTERFACE: {
                 uint8_t intf = setup->wIndex & 0xFF;
-                uint8_t* p = malloc(1);
+                uint8_t* p = osal_malloc(1);
                 if (p)
                 {
                     *p = (intf < USB_MAX_INTERFACES) ? ctx->alt_setting[intf] : 0;
@@ -114,12 +114,12 @@ int usb_control_handle_setup(const struct usb_setup_packet* setup, struct usb_co
                 break;
         }
     }
-    /* 类特定请求 */
+    /* Class-specific requests */
     else if (type == USB_TYPE_CLASS)
     {
         ret = usb_control_class_request(setup, ctx, data_out, data_len);
     }
-    /* 厂商请求 */
+    /* Vendor requests */
     else if (type == USB_TYPE_VENDOR)
     {
         if (ctx->vendor_handler)
@@ -136,7 +136,7 @@ int usb_control_handle_setup(const struct usb_setup_packet* setup, struct usb_co
         ret = USB_CONTROL_STALL;
     }
 
-    /* 限制返回数据长度 */
+    /* Limit returned data length */
     if (*data_len > setup->wLength && *data_out)
     {
         *data_len = setup->wLength;
@@ -146,7 +146,7 @@ int usb_control_handle_setup(const struct usb_setup_packet* setup, struct usb_co
 }
 
 /*****************************************************************************
- * GET_DESCRIPTOR 处理
+ * GET_DESCRIPTOR Handling
  *****************************************************************************/
 
 int usb_control_get_descriptor(const struct usb_setup_packet* setup,
@@ -163,7 +163,7 @@ int usb_control_get_descriptor(const struct usb_setup_packet* setup,
         case USB_DT_DEVICE:
             if (ctx->device_desc)
             {
-                *data_out = malloc(USB_DT_DEVICE_SIZE);
+                *data_out = osal_malloc(USB_DT_DEVICE_SIZE);
                 if (*data_out)
                 {
                     memcpy(*data_out, ctx->device_desc, USB_DT_DEVICE_SIZE);
@@ -178,7 +178,7 @@ int usb_control_get_descriptor(const struct usb_setup_packet* setup,
             {
                 if (desc_index < ctx->num_configs)
                 {
-                    *data_out = malloc(ctx->config_desc_len);
+                    *data_out = osal_malloc(ctx->config_desc_len);
                     if (*data_out)
                     {
                         memcpy(*data_out, ctx->config_desc, ctx->config_desc_len);
@@ -193,7 +193,7 @@ int usb_control_get_descriptor(const struct usb_setup_packet* setup,
             return usb_control_get_string(desc_index, ctx, data_out, data_len);
 
         case USB_DT_DEVICE_QUALIFIER:
-            /* USB 2.0 全速设备返回 STALL */
+            /* USB 2.0 full-speed devices return STALL */
             return USB_CONTROL_STALL;
 
         case USB_DT_OTHER_SPEED_CONFIG:
@@ -202,7 +202,7 @@ int usb_control_get_descriptor(const struct usb_setup_packet* setup,
         case USB_DT_HID:
             if (ctx->hid_desc)
             {
-                *data_out = malloc(USB_DT_HID_SIZE);
+                *data_out = osal_malloc(USB_DT_HID_SIZE);
                 if (*data_out)
                 {
                     memcpy(*data_out, ctx->hid_desc, USB_DT_HID_SIZE);
@@ -215,7 +215,7 @@ int usb_control_get_descriptor(const struct usb_setup_packet* setup,
         case USB_DT_REPORT:
             if (ctx->report_desc && ctx->report_desc_len > 0)
             {
-                *data_out = malloc(ctx->report_desc_len);
+                *data_out = osal_malloc(ctx->report_desc_len);
                 if (*data_out)
                 {
                     memcpy(*data_out, ctx->report_desc, ctx->report_desc_len);
@@ -228,7 +228,7 @@ int usb_control_get_descriptor(const struct usb_setup_packet* setup,
         case USB_DT_BOS:
             if (ctx->bos_desc && ctx->bos_desc_len > 0)
             {
-                *data_out = malloc(ctx->bos_desc_len);
+                *data_out = osal_malloc(ctx->bos_desc_len);
                 if (*data_out)
                 {
                     memcpy(*data_out, ctx->bos_desc, ctx->bos_desc_len);
@@ -239,7 +239,7 @@ int usb_control_get_descriptor(const struct usb_setup_packet* setup,
             break;
 
         default:
-            /* 尝试回调 */
+            /* Try callback */
             if (ctx->descriptor_handler)
             {
                 return ctx->descriptor_handler(desc_type, desc_index, ctx->user_data, data_out,
@@ -252,7 +252,7 @@ int usb_control_get_descriptor(const struct usb_setup_packet* setup,
 }
 
 /*****************************************************************************
- * GET_STRING_DESCRIPTOR 处理
+ * GET_STRING_DESCRIPTOR Handling
  *****************************************************************************/
 
 int usb_control_get_string(uint8_t index, struct usb_control_context* ctx, void** data_out,
@@ -263,7 +263,7 @@ int usb_control_get_string(uint8_t index, struct usb_control_context* ctx, void*
 
     if (index == 0)
     {
-        /* 语言 ID 描述符 */
+        /* Language ID descriptor */
         if (ctx->lang_id_desc)
         {
             str_desc = ctx->lang_id_desc;
@@ -278,7 +278,7 @@ int usb_control_get_string(uint8_t index, struct usb_control_context* ctx, void*
     else if (ctx->string_descs && index <= ctx->num_strings)
     {
         str_desc = ctx->string_descs[index - 1];
-        str_len = str_desc[0]; /* 首字节是长度 */
+        str_len = str_desc[0]; /* First byte is length */
     }
     else if (ctx->string_handler)
     {
@@ -287,7 +287,7 @@ int usb_control_get_string(uint8_t index, struct usb_control_context* ctx, void*
 
     if (str_desc && str_len > 0)
     {
-        *data_out = malloc(str_len);
+        *data_out = osal_malloc(str_len);
         if (*data_out)
         {
             memcpy(*data_out, str_desc, str_len);
@@ -300,7 +300,7 @@ int usb_control_get_string(uint8_t index, struct usb_control_context* ctx, void*
 }
 
 /*****************************************************************************
- * SET/GET_CONFIGURATION 处理
+ * SET/GET_CONFIGURATION Handling
  *****************************************************************************/
 
 int usb_control_set_config(const struct usb_setup_packet* setup, struct usb_control_context* ctx,
@@ -311,12 +311,12 @@ int usb_control_set_config(const struct usb_setup_packet* setup, struct usb_cont
 
     uint8_t config_value = setup->wValue & 0xFF;
 
-    /* 检查配置值是否有效 */
+    /* Check if config value is valid */
     if (config_value == 0 || config_value <= ctx->num_configs)
     {
         ctx->config_value = config_value;
 
-        /* 回调通知 */
+        /* Callback notification */
         if (ctx->config_handler)
         {
             ctx->config_handler(config_value, ctx->user_data);
@@ -333,7 +333,7 @@ int usb_control_get_config(const struct usb_setup_packet* setup, struct usb_cont
 {
     (void)setup;
 
-    uint8_t* p = malloc(1);
+    uint8_t* p = osal_malloc(1);
     if (p)
     {
         *p = ctx->config_value;
@@ -346,7 +346,7 @@ int usb_control_get_config(const struct usb_setup_packet* setup, struct usb_cont
 }
 
 /*****************************************************************************
- * GET_STATUS 处理
+ * GET_STATUS Handling
  *****************************************************************************/
 
 int usb_control_get_status(const struct usb_setup_packet* setup, struct usb_control_context* ctx,
@@ -355,7 +355,7 @@ int usb_control_get_status(const struct usb_setup_packet* setup, struct usb_cont
     (void)ctx;
 
     uint8_t recipient = USB_SETUP_RECIPIENT(setup);
-    uint16_t* status = malloc(2);
+    uint16_t* status = osal_malloc(2);
 
     if (!status)
     {
@@ -365,8 +365,8 @@ int usb_control_get_status(const struct usb_setup_packet* setup, struct usb_cont
     switch (recipient)
     {
         case USB_RECIP_DEVICE:
-            /* Bus-powered, 不支持远程唤醒 */
-            *status = 0x0000; /* Bus-powered */
+            /* Bus-powered, no remote wakeup support */
+            *status = 0x0000; 
             break;
 
         case USB_RECIP_INTERFACE:
@@ -374,12 +374,12 @@ int usb_control_get_status(const struct usb_setup_packet* setup, struct usb_cont
             break;
 
         case USB_RECIP_ENDPOINT:
-            /* 端点状态（ halted 或 not） */
-            *status = 0x0000; /* Not halted */
+            /* Endpoint status (Not halted) */
+            *status = 0x0000;
             break;
 
         default:
-            free(status);
+            osal_free(status);
             return USB_CONTROL_STALL;
     }
 
@@ -389,13 +389,13 @@ int usb_control_get_status(const struct usb_setup_packet* setup, struct usb_cont
 }
 
 /*****************************************************************************
- * 类请求处理（默认实现，可被覆盖）
+ * Class Request Handling (default implementation, can be overridden)
  *****************************************************************************/
 
 int usb_control_class_request(const struct usb_setup_packet* setup, struct usb_control_context* ctx,
                               void** data_out, size_t* data_len)
 {
-    /* 如果提供了类请求处理器，调用它 */
+    /* If class handler is provided, call it */
     if (ctx->class_handler)
     {
         return ctx->class_handler(setup, ctx->user_data, data_out, data_len);

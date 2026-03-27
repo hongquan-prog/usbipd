@@ -5,20 +5,19 @@
  *
  * Change Logs:
  * Date           Author       Notes
- * 2026-9-8      hongquan.li   add license declaration
+ * 2026-3-24      hongquan.li   add license declaration
  */
 
 /*
  * Virtual CMSIS-DAP v2 Bulk Device
  *
- * 通过 USBIP 虚拟一个 CMSIS-DAP v2 调试探针
- * 使用 Bulk 端点传输，匹配真实 DAPLink v2 行为
+ * Virtual CMSIS-DAP v2 debug probe via USBIP
+ * Uses Bulk endpoint transfer, matching real DAPLink v2 behavior
  */
 
 #include <endian.h>
 #include <errno.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "DAP.h"
@@ -33,7 +32,7 @@
 LOG_MODULE_REGISTER(dap_v2, CONFIG_BULK_DAP_LOG_LEVEL);
 
 /*****************************************************************************
- * DAP v2 设备配置
+ * DAP v2 Device Configuration
  *****************************************************************************/
 
 #define BULK_DAP_VID 0xFAED
@@ -41,7 +40,7 @@ LOG_MODULE_REGISTER(dap_v2, CONFIG_BULK_DAP_LOG_LEVEL);
 #define BULK_DAP_PACKET_SIZE 512 /* High Speed Bulk packet size */
 
 /*****************************************************************************
- * BOS Descriptor - 包含 Microsoft OS 2.0 Platform Capability
+ * BOS Descriptor - Contains Microsoft OS 2.0 Platform Capability
  *****************************************************************************/
 
 #define MS_OS_20_VENDOR_CODE 0x01
@@ -69,7 +68,7 @@ static const uint8_t dap_v2_bos_desc[] = {
 };
 
 /*****************************************************************************
- * Microsoft OS 2.0 Descriptor Set - 完全按照参考代码
+ * Microsoft OS 2.0 Descriptor Set - Follow reference code exactly
  *****************************************************************************/
 
 /* clang-format off */
@@ -100,7 +99,7 @@ static const uint8_t dap_v2_msos20_desc[] = {
 /* clang-format on */
 
 /*****************************************************************************
- * USB 描述符
+ * USB Descriptors
  *****************************************************************************/
 
 static const struct usb_device_descriptor dap_v2_dev_desc = {
@@ -133,7 +132,7 @@ struct usb_iad
     uint8_t iFunction;
 } __attribute__((packed));
 
-/* CDC 类描述符 */
+/* CDC Class Descriptor */
 struct cdc_header_desc
 {
     uint8_t bLength;
@@ -168,7 +167,7 @@ struct cdc_union_desc
     uint8_t bSlaveInterface;
 } __attribute__((packed));
 
-/* DAP v2 简单配置描述符 - 单接口 */
+/* DAP v2 Simple Config Descriptor - Single Interface */
 struct dap_v2_config_desc
 {
     struct usb_config_descriptor config;
@@ -224,7 +223,7 @@ static const struct dap_v2_config_desc dap_v2_cfg_desc = {
 };
 
 /*****************************************************************************
- * 字符串描述符
+ * String Descriptors
  *****************************************************************************/
 
 /* clang-format off */
@@ -246,7 +245,7 @@ static const uint8_t* dap_v2_string_descs[] = {string1_desc, string2_desc, strin
                                                string4_desc};
 
 /*****************************************************************************
- * DAP v2 设备状态
+ * DAP v2 Device State
  *****************************************************************************/
 
 struct virtual_dap_v2
@@ -257,7 +256,7 @@ struct virtual_dap_v2
     int exported;
     struct usbip_conn_ctx* ctx;
 
-    /* DAP 响应缓冲区 */
+    /* DAP Response Buffer */
     uint8_t response[BULK_DAP_PACKET_SIZE];
     size_t response_len;
     int response_pending;
@@ -269,8 +268,9 @@ static int vdap_v2_handle_urb(struct usbip_device_driver* driver,
                               const struct usbip_header* urb_cmd, struct usbip_header* urb_ret,
                               void** data_out, size_t* data_len, const void* urb_data,
                               size_t urb_data_len);
-static int vdap_v2_get_device_list(struct usbip_device_driver* driver,
-                                   struct usbip_usb_device** devices, int* count);
+static int vdap_v2_get_device_count(struct usbip_device_driver* driver);
+static int vdap_v2_get_device_by_index(struct usbip_device_driver* driver, int index,
+                                       struct usbip_usb_device* device);
 static const struct usbip_usb_device* vdap_v2_get_device(struct usbip_device_driver* driver,
                                                          const char* busid);
 static int vdap_v2_export_device(struct usbip_device_driver* driver, const char* busid,
@@ -280,7 +280,7 @@ static int vdap_v2_init(struct usbip_device_driver* driver);
 static void vdap_v2_cleanup(struct usbip_device_driver* driver);
 
 /*****************************************************************************
- * DAP 命令处理
+ * DAP Command Processing
  *****************************************************************************/
 
 static void dap_v2_process_command(const void* data, size_t len)
@@ -309,7 +309,7 @@ static void dap_v2_process_command(const void* data, size_t len)
 }
 
 /*****************************************************************************
- * URB 处理
+ * URB Processing
  *****************************************************************************/
 
 static int vdap_v2_handle_urb(struct usbip_device_driver* driver,
@@ -346,13 +346,13 @@ static int vdap_v2_handle_urb(struct usbip_device_driver* driver,
                 const struct usb_setup_packet* setup =
                     (const struct usb_setup_packet*)urb_cmd->u.cmd_submit.setup;
 
-                /* 记录所有控制请求 */
+                /* Log all control requests */
                 LOG_INF("Control: bmRequestType=0x%02x bRequest=0x%02x wValue=0x%04x wIndex=0x%04x "
                         "wLength=%d",
                         setup->bmRequestType, setup->bRequest, setup->wValue, setup->wIndex,
                         setup->wLength);
 
-                /* 检查是否是 Microsoft OS 2.0 厂商请求 */
+                /* Check if this is a Microsoft OS 2.0 vendor request */
                 if (USB_SETUP_TYPE(setup) == 0x02 && /* Vendor type */
                     USB_SETUP_IS_IN(setup))
                 {
@@ -365,7 +365,7 @@ static int vdap_v2_handle_urb(struct usbip_device_driver* driver,
                         if (setup->wIndex == 0x0007)
                         {
                             LOG_INF("MS OS 2.0 Descriptor request");
-                            *data_out = malloc(sizeof(dap_v2_msos20_desc));
+                            *data_out = osal_malloc(sizeof(dap_v2_msos20_desc));
                             if (*data_out)
                             {
                                 memcpy(*data_out, dap_v2_msos20_desc, sizeof(dap_v2_msos20_desc));
@@ -384,7 +384,8 @@ static int vdap_v2_handle_urb(struct usbip_device_driver* driver,
                             }
                             break;
                         }
-                        else if (setup->wIndex == 0x0008) /* MS_OS_20_SET_ALT_ENUMERATION */
+                        /* MS_OS_20_SET_ALT_ENUMERATION */
+                        else if (setup->wIndex == 0x0008)
                         {
                             LOG_INF("MS OS 2.0 Alt Enumeration request");
                             *data_out = NULL;
@@ -438,7 +439,7 @@ static int vdap_v2_handle_urb(struct usbip_device_driver* driver,
                 if (vdap_v2.response_pending)
                 {
                     size_t actual_len = vdap_v2.response_len;
-                    *data_out = malloc(actual_len);
+                    *data_out = osal_malloc(actual_len);
                     if (*data_out)
                     {
                         memcpy(*data_out, vdap_v2.response, actual_len);
@@ -451,12 +452,12 @@ static int vdap_v2_handle_urb(struct usbip_device_driver* driver,
                 }
                 else
                 {
-                    /* Bulk 端点没有数据时返回 NAK (返回 0 字节让主机重试) */
+                    /* Bulk endpoint has no data, return NAK (return 0 bytes to let host retry) */
                     *data_out = NULL;
                     *data_len = 0;
                     urb_ret->u.ret_submit.status = 0;
                     urb_ret->u.ret_submit.actual_length = 0;
-                    /* 无响应时延迟1ms，优化PyOCD响应 */
+                    /* Delay 1ms when no response to optimize PyOCD response */
                     osal_sleep_ms(1);
                 }
             }
@@ -483,32 +484,34 @@ static int vdap_v2_handle_urb(struct usbip_device_driver* driver,
 }
 
 /*****************************************************************************
- * 设备枚举接口
+ * Device Enumeration Interface
  *****************************************************************************/
 
-static int vdap_v2_get_device_list(struct usbip_device_driver* driver,
-                                   struct usbip_usb_device** devices, int* count)
+static int vdap_v2_get_device_count(struct usbip_device_driver* driver)
 {
-    struct usbip_usb_device* devs;
-
     (void)driver;
-    *devices = NULL;
-    *count = 0;
 
     if (vdap_v2.udev.busid[0] == '\0' || usbip_is_device_busy(vdap_v2.udev.busid))
     {
         return 0;
     }
 
-    devs = calloc(1, sizeof(*devs));
-    if (!devs)
+    return 1;
+}
+
+static int vdap_v2_get_device_by_index(struct usbip_device_driver* driver, int index,
+                                       struct usbip_usb_device* device)
+{
+    (void)driver;
+
+    if (index != 0 || vdap_v2.udev.busid[0] == '\0' ||
+        usbip_is_device_busy(vdap_v2.udev.busid))
     {
         return -1;
     }
 
-    memcpy(devs, &vdap_v2.udev, sizeof(*devs));
-    *devices = devs;
-    *count = 1;
+    memcpy(device, &vdap_v2.udev, sizeof(*device));
+
     return 0;
 }
 
@@ -560,7 +563,7 @@ static int vdap_v2_unexport_device(struct usbip_device_driver* driver, const cha
 }
 
 /*****************************************************************************
- * 初始化与清理
+ * Initialization and Cleanup
  *****************************************************************************/
 
 static int vdap_v2_init(struct usbip_device_driver* driver)
@@ -607,7 +610,8 @@ static void vdap_v2_cleanup(struct usbip_device_driver* driver)
 
 struct usbip_device_driver virtual_dap_v2_driver = {
     .name = "virtual-dap-v2",
-    .get_device_list = vdap_v2_get_device_list,
+    .get_device_count = vdap_v2_get_device_count,
+    .get_device_by_index = vdap_v2_get_device_by_index,
     .get_device = vdap_v2_get_device,
     .export_device = vdap_v2_export_device,
     .unexport_device = vdap_v2_unexport_device,

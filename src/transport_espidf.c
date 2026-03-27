@@ -5,31 +5,25 @@
  *
  * Change Logs:
  * Date           Author       Notes
- * 2026-3-24      hongquan.li   add license declaration
+ * 2026-3-27     hongquan.li   add ESP-IDF transport implementation
  */
 
 /*****************************************************************************
- * TCP Transport Implementation
+ * ESP-IDF Transport Implementation
  *
- * TCP-based transport layer implementation
+ * TCP-based transport layer implementation for ESP-IDF using lwIP
  *****************************************************************************/
 
-#include <arpa/inet.h>
 #include <errno.h>
-#include <fcntl.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <stdio.h>
 #include <string.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <unistd.h>
 
-#include "hal/usbip_osal.h"
+#include "lwip/netdb.h"
+#include "lwip/sockets.h"
+
 #include "hal/usbip_transport.h"
 
 /*****************************************************************************
- * TCP Transport Private Data
+ * ESP-IDF Transport Private Data
  *****************************************************************************/
 
 struct tcp_transport_priv
@@ -44,29 +38,28 @@ struct tcp_conn_priv
 };
 
 /*****************************************************************************
- * TCP Transport Implementation
+ * ESP-IDF Transport Implementation
  *****************************************************************************/
 
 static int tcp_listen(struct usbip_transport* trans, uint16_t port)
 {
     struct tcp_transport_priv* priv = trans->priv;
-
-    int opt = 1;
     struct sockaddr_in addr;
+    int opt = 1;
 
     priv->fd = socket(AF_INET, SOCK_STREAM, 0);
+
     if (priv->fd < 0)
     {
-        perror("socket");
         return -1;
     }
 
     /* Set SO_REUSEADDR */
     if (setsockopt(priv->fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
     {
-        perror("setsockopt SO_REUSEADDR");
         close(priv->fd);
         priv->fd = -1;
+
         return -1;
     }
 
@@ -78,40 +71,40 @@ static int tcp_listen(struct usbip_transport* trans, uint16_t port)
 
     if (bind(priv->fd, (struct sockaddr*)&addr, sizeof(addr)) < 0)
     {
-        perror("bind");
         close(priv->fd);
         priv->fd = -1;
+
         return -1;
     }
 
     /* Start listening */
     if (listen(priv->fd, 10) < 0)
     {
-        perror("listen");
         close(priv->fd);
         priv->fd = -1;
+
         return -1;
     }
 
     priv->port = port;
+
     return 0;
 }
 
 static struct usbip_conn_ctx* tcp_accept(struct usbip_transport* trans)
 {
     struct tcp_transport_priv* priv = trans->priv;
-
     struct sockaddr_in client_addr;
-    socklen_t addr_len = sizeof(client_addr);
     struct usbip_conn_ctx* ctx;
     struct tcp_conn_priv* conn_priv;
+    socklen_t addr_len = sizeof(client_addr);
     int fd;
     int opt = 1;
 
     fd = accept(priv->fd, (struct sockaddr*)&client_addr, &addr_len);
+
     if (fd < 0)
     {
-        perror("accept");
         return NULL;
     }
 
@@ -121,29 +114,26 @@ static struct usbip_conn_ctx* tcp_accept(struct usbip_transport* trans)
     /* Set SO_KEEPALIVE - Keep connection alive */
     setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &opt, sizeof(opt));
 
-#ifdef DEBUG
-    printf("Accepted connection from %s:%d\n", inet_ntoa(client_addr.sin_addr),
-           ntohs(client_addr.sin_port));
-#endif
-
     /* Create connection context */
-    ctx = osal_malloc(sizeof(*ctx));
+    ctx = calloc(1, sizeof(*ctx));
+
     if (!ctx)
     {
         close(fd);
+
         return NULL;
     }
 
-    memset(ctx, 0, sizeof(*ctx));
-    conn_priv = osal_malloc(sizeof(*conn_priv));
+    conn_priv = calloc(1, sizeof(*conn_priv));
+
     if (!conn_priv)
     {
         osal_free(ctx);
         close(fd);
+
         return NULL;
     }
 
-    memset(conn_priv, 0, sizeof(*conn_priv));
     conn_priv->fd = fd;
     ctx->priv = conn_priv;
 
@@ -153,28 +143,30 @@ static struct usbip_conn_ctx* tcp_accept(struct usbip_transport* trans)
 static ssize_t tcp_recv(struct usbip_conn_ctx* ctx, void* buf, size_t len)
 {
     struct tcp_conn_priv* priv = ctx->priv;
-
-    ssize_t n;
     size_t total = 0;
+    ssize_t n;
 
     /* Use MSG_WAITALL to ensure complete data reception */
     while (total < len)
     {
         n = recv(priv->fd, (char*)buf + total, len - total, MSG_WAITALL);
+
         if (n <= 0)
         {
             if (n < 0 && errno == EINTR)
             {
                 continue;
             }
+
             if (n == 0)
             {
                 /* Connection closed */
                 return 0;
             }
-            perror("recv");
+
             return -1;
         }
+
         total += n;
     }
 
@@ -184,25 +176,23 @@ static ssize_t tcp_recv(struct usbip_conn_ctx* ctx, void* buf, size_t len)
 static ssize_t tcp_send(struct usbip_conn_ctx* ctx, const void* buf, size_t len)
 {
     struct tcp_conn_priv* priv = ctx->priv;
-
-    ssize_t n;
     size_t total = 0;
+    ssize_t n;
 
     while (total < len)
     {
-        n = send(priv->fd, (const char*)buf + total, len - total, MSG_NOSIGNAL);
+        n = send(priv->fd, (const char*)buf + total, len - total, 0);
+
         if (n <= 0)
         {
             if (n < 0 && errno == EINTR)
             {
                 continue;
             }
-            if (n < 0)
-            {
-                perror("send");
-            }
+
             return -1;
         }
+
         total += n;
     }
 
@@ -216,6 +206,7 @@ static void tcp_close(struct usbip_conn_ctx* ctx)
     if (ctx)
     {
         priv = ctx->priv;
+
         if (priv)
         {
             if (priv->fd >= 0)
@@ -267,4 +258,4 @@ static struct usbip_transport trans = {.priv = &priv,
                                        .destroy = tcp_destroy,
                                        .get_poll_fd = tcp_get_poll_fd};
 
-TRANSPORT_REGISTER(tcp, trans);
+TRANSPORT_REGISTER(espidf, trans);

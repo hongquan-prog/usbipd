@@ -5,7 +5,7 @@
  *
  * Change Logs:
  * Date           Author       Notes
- * 2026-9-8      hongquan.li   add license declaration
+ * 2026-3-24      hongquan.li   add license declaration
  */
 
 /*
@@ -15,7 +15,6 @@
  */
 
 #include "hal/usbip_transport.h"
-#include <stdlib.h>
 #include <string.h>
 #include "hal/usbip_log.h"
 

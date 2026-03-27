@@ -111,7 +111,7 @@ finish();
  *
  * Change Logs:
  * Date           Author       Notes
- * 2026-9-8      hongquan.li   add license declaration
+ *
  */
 
 /**
@@ -133,6 +133,27 @@ if (err != 0)
 **包含顺序**
 1. 系统头文件 `<*.h>`
 2. 项目头文件 `"*.h"`
+
+**变量定义**
+
+临时变量定义在函数最前面，按照先声明后使用的顺序排列：
+
+```c
+static int example_function(struct usbip_transport* trans, uint16_t port)
+{
+    struct tcp_transport_priv* priv = trans->priv;  /* 先声明所有变量 */
+    int opt = 1;
+    struct sockaddr_in addr;
+
+    priv->fd = socket(AF_INET, SOCK_STREAM, 0);     /* 后写代码逻辑 */
+    if (priv->fd < 0)
+    {
+        return -1;
+    }
+
+    ...
+}
+```
 
 ### 格式化命令
 
@@ -192,8 +213,8 @@ usbip-server/
 │   │   ├── usbip_devmgr.c       # 设备管理
 │   │   └── usbip_control.c      # 控制传输框架
 │   ├── device/                  # 设备驱动
-│   │   ├── virtual_hid.c        # HID 基类
-│   │   ├── virtual_bulk.c       # Bulk 基类
+│   │   ├── usbip_hid.c          # HID 基类
+│   │   ├── usbip_bulk.c         # Bulk 基类
 │   │   └── ...
 │   └── main.c                   # 主程序
 └── components/                  # 第三方组件
@@ -214,10 +235,8 @@ usbip-server/
 ### 设备驱动
 - `src/hid_dap.c` - CMSIS-DAP v1 HID 设备
 - `src/bulk_dap.c` - CMSIS-DAP v2 Bulk 设备 (主要调试设备)
-- `src/device/virtual_msc.c` - MSC 大容量存储设备
-- `src/device/virtual_cdc.c` - CDC ACM 串口设备
-- `src/device/virtual_hid.c` - HID 通用设备基类
-- `src/device/virtual_bulk.c` - Bulk 通用设备基类
+- `src/device/usbip_hid.c` - HID 通用设备基类
+- `src/device/usbip_bulk.c` - Bulk 通用设备基类
 
 ### 调试探针
 - `components/debug_probe/debug_gpio.c` - GPIO bit-banging SWD 实现

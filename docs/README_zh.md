@@ -239,28 +239,6 @@ sudo usbip attach -r localhost -b 2-2
 
 ---
 
-## 添加自定义设备
-
-实现 `usbip_devmgr.h` 中定义的接口：
-
-```c
-struct usbip_device_driver my_driver = {
-    .name = "my-device",
-    .init = my_init,
-    .cleanup = my_cleanup,
-    .get_device_list = my_get_device_list,
-    .get_device = my_get_device,
-    .export_device = my_export_device,
-    .unexport_device = my_unexport_device,
-    .handle_urb = my_handle_urb,
-};
-
-// 注册驱动
-usbip_register_driver(&my_driver);
-```
-
----
-
 ## 协议支持
 
 - [x] OP_REQ_DEVLIST / OP_REP_DEVLIST

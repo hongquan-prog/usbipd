@@ -5,19 +5,18 @@
  *
  * Change Logs:
  * Date           Author       Notes
- * 2026-9-8      hongquan.li   add license declaration
+ * 2026-3-24      hongquan.li   add license declaration
  */
 
 /*
  * USBIP Server Core
  *
- * 服务器核心逻辑：连接管理、设备枚举
+ * Server core logic: connection management, device enumeration
  */
 #include <endian.h>
 #include <errno.h>
 #include <poll.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -30,108 +29,98 @@
 LOG_MODULE_REGISTER(server, CONFIG_SERVER_LOG_LEVEL);
 
 /*****************************************************************************
- * 全局状态
+ * Global State
  *****************************************************************************/
 
 static volatile int s_running = 1;
 
 /*****************************************************************************
- * 静态函数声明
+ * Static Function Declarations
  *****************************************************************************/
 
 static int usbip_server_handle_devlist(struct usbip_conn_ctx* ctx);
 static int usbip_server_handle_import_req(struct usbip_conn_ctx* ctx);
 
 /*
- * OP_REQ_DEVLIST 处理
+ * OP_REQ_DEVLIST Processing
  */
-
 static int usbip_server_handle_devlist(struct usbip_conn_ctx* ctx)
 {
-    struct usbip_usb_device* devices = NULL;
+    struct usbip_usb_device udev;
     struct usbip_usb_interface iface;
-    int device_count = 0;
-    uint32_t reply_count;
     struct usbip_device_driver* driver;
-    int ret = -1;
+    uint32_t reply_count;
+    int device_count = 0;
+    int drv_idx;
 
-    /* 发送操作头 */
+    /* Send operation header */
     if (usbip_send_op_common(ctx, OP_REP_DEVLIST, ST_OK) < 0)
     {
         LOG_ERR("Failed to send OP_REP_DEVLIST header");
+
         return -1;
     }
 
-    /* 收集所有驱动的设备 */
+    /* Count total devices from all drivers */
     for (driver = usbip_get_first_driver(); driver != NULL; driver = usbip_get_next_driver(driver))
     {
-
-        struct usbip_usb_device* drv_devices = NULL;
-        int drv_count = 0;
-
-        if (driver->get_device_list(driver, &drv_devices, &drv_count) == 0 && drv_count > 0)
-        {
-            struct usbip_usb_device* new_devices =
-                realloc(devices, (device_count + drv_count) * sizeof(*devices));
-            if (!new_devices)
-            {
-                free(drv_devices);
-                continue;
-            }
-            devices = new_devices;
-            memcpy(&devices[device_count], drv_devices, drv_count * sizeof(*devices));
-            device_count += drv_count;
-            free(drv_devices);
-        }
+        device_count += driver->get_device_count(driver);
     }
 
-    /* 发送设备数量 */
+    /* Send device count */
     reply_count = htobe32(device_count);
+
     if (transport_send(ctx, &reply_count, sizeof(reply_count)) != sizeof(reply_count))
     {
         LOG_ERR("Failed to send device count");
-        goto out;
+
+        return -1;
     }
 
     LOG_DBG("Sending %d device(s)", device_count);
 
-    /* 发送每个设备 */
-    for (int i = 0; i < device_count; i++)
+    /* Send each device from all drivers */
+    for (driver = usbip_get_first_driver(); driver != NULL; driver = usbip_get_next_driver(driver))
     {
-        struct usbip_usb_device udev;
+        int drv_count = driver->get_device_count(driver);
 
-        memcpy(&udev, &devices[i], sizeof(udev));
-        usbip_pack_usb_device(&udev, 1);
-
-        if (transport_send(ctx, &udev, sizeof(udev)) != sizeof(udev))
+        for (drv_idx = 0; drv_idx < drv_count; drv_idx++)
         {
-            LOG_ERR("Failed to send device %d", i);
-            goto out;
-        }
+            if (driver->get_device_by_index(driver, drv_idx, &udev) < 0)
+            {
+                continue;
+            }
 
-        /* 发送接口信息 */
-        memset(&iface, 0, sizeof(iface));
-        iface.bInterfaceClass = 0x03; /* HID */
-        iface.bInterfaceSubClass = 0x01;
-        iface.bInterfaceProtocol = 0x01;
-        usbip_pack_usb_interface(&iface, 1);
+            usbip_pack_usb_device(&udev, 1);
 
-        if (transport_send(ctx, &iface, sizeof(iface)) != sizeof(iface))
-        {
-            LOG_ERR("Failed to send interface for device %d", i);
-            goto out;
+            if (transport_send(ctx, &udev, sizeof(udev)) != sizeof(udev))
+            {
+                LOG_ERR("Failed to send device");
+
+                return -1;
+            }
+
+            /* Send interface information */
+            memset(&iface, 0, sizeof(iface));
+            iface.bInterfaceClass = 0x03;
+            iface.bInterfaceSubClass = 0x01;
+            iface.bInterfaceProtocol = 0x01;
+            usbip_pack_usb_interface(&iface, 1);
+
+            if (transport_send(ctx, &iface, sizeof(iface)) != sizeof(iface))
+            {
+                LOG_ERR("Failed to send interface");
+
+                return -1;
+            }
         }
     }
 
-    ret = 0;
-
-out:
-    free(devices);
-    return ret;
+    return 0;
 }
 
 /*****************************************************************************
- * OP_REQ_IMPORT 处理
+ * OP_REQ_IMPORT Processing
  *****************************************************************************/
 
 static int usbip_server_handle_import_req(struct usbip_conn_ctx* ctx)
@@ -141,7 +130,7 @@ static int usbip_server_handle_import_req(struct usbip_conn_ctx* ctx)
     const struct usbip_usb_device* found_dev = NULL;
     int found = 0;
 
-    /* 接收 busid */
+    /* Receive busid */
     memset(busid, 0, sizeof(busid));
     if (transport_recv(ctx, busid, sizeof(busid)) != sizeof(busid))
     {
@@ -150,7 +139,7 @@ static int usbip_server_handle_import_req(struct usbip_conn_ctx* ctx)
         return -1;
     }
 
-    /* 查找设备 */
+    /* Find device */
     for (driver = usbip_get_first_driver(); driver != NULL && !found;
          driver = usbip_get_next_driver(driver))
     {
@@ -177,14 +166,14 @@ static int usbip_server_handle_import_req(struct usbip_conn_ctx* ctx)
         return -1;
     }
 
-    /* 发送成功响应 */
+    /* Send success response */
     if (usbip_send_op_common(ctx, OP_REP_IMPORT, ST_OK) < 0)
     {
         LOG_ERR("Failed to send OP_REP_IMPORT header");
         return -1;
     }
 
-    /* 发送设备描述 */
+    /* Send device descriptor */
     struct usbip_usb_device reply_dev;
     memcpy(&reply_dev, found_dev, sizeof(reply_dev));
     usbip_pack_usb_device(&reply_dev, 1);
@@ -195,7 +184,7 @@ static int usbip_server_handle_import_req(struct usbip_conn_ctx* ctx)
         return -1;
     }
 
-    /* 导出设备 */
+    /* Export device */
     if (driver->export_device(driver, busid, ctx) < 0)
     {
         LOG_ERR("Failed to export device: %s", busid);
@@ -204,12 +193,12 @@ static int usbip_server_handle_import_req(struct usbip_conn_ctx* ctx)
 
     LOG_DBG("Device imported: %s", busid);
 
-    /* 进入 URB 处理循环 */
+    /* Enter URB processing loop */
     return usbip_urb_loop(ctx, driver, busid);
 }
 
 /*****************************************************************************
- * 连接处理
+ * Connection Handling
  *****************************************************************************/
 
 void usbip_server_handle_connection(struct usbip_conn_ctx* ctx)
@@ -218,7 +207,7 @@ void usbip_server_handle_connection(struct usbip_conn_ctx* ctx)
 
     LOG_DBG("Handling new connection");
 
-    /* 接收操作头 */
+    /* Receive operation header */
     if (usbip_recv_op_common(ctx, &op) < 0)
     {
         LOG_DBG("Failed to receive op_common");
@@ -229,7 +218,7 @@ void usbip_server_handle_connection(struct usbip_conn_ctx* ctx)
     LOG_DBG("Received op: version=0x%04x code=0x%04x status=0x%08x", op.version, op.code,
             op.status);
 
-    /* 检查版本 */
+    /* Check version */
     if (op.version != USBIP_VERSION)
     {
         LOG_ERR("Unsupported version: 0x%04x", op.version);
@@ -238,7 +227,7 @@ void usbip_server_handle_connection(struct usbip_conn_ctx* ctx)
         return;
     }
 
-    /* 处理操作 */
+    /* Handle operation */
     switch (op.code)
     {
         case OP_REQ_DEVLIST:
@@ -259,7 +248,7 @@ void usbip_server_handle_connection(struct usbip_conn_ctx* ctx)
 }
 
 /*****************************************************************************
- * 服务器接口
+ * Server interface
  *****************************************************************************/
 
 int usbip_server_init(uint16_t port)

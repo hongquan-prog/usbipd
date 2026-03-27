@@ -5,42 +5,42 @@
  *
  * Change Logs:
  * Date           Author       Notes
- * 2026-9-8      hongquan.li   add license declaration
+ * 2026-3-24      hongquan.li   add license declaration
  */
 
 /*
  * Virtual Custom Bulk Device (Refactored)
  *
- * 自定义 Bulk 设备，用于测试 Bulk IN/OUT 传输
- * 使用 usbip_common.h 框架
+ * Custom Bulk device for testing Bulk IN/OUT transfers
+ * Uses usbip_common.h framework
  */
 
 #include <errno.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "hal/usbip_log.h"
+#include "hal/usbip_osal.h"
 #include "usbip_common.h"
 #include "usbip_devmgr.h"
 
 LOG_MODULE_REGISTER(bulk, CONFIG_BULK_LOG_LEVEL);
 
 /*****************************************************************************
- * 配置
+ * Configuration
  *****************************************************************************/
 
 #define BULK_MAX_PACKET 512
-#define BULK_BUFFER_SIZE 256 /* 满足 10KB 限制 */
+#define BULK_BUFFER_SIZE 256 /* Satisfy 10KB limit */
 
-/* 自定义命令 */
+/* Custom commands */
 #define CMD_ECHO 0x01
 #define CMD_GET_INFO 0x02
 #define CMD_SET_LED 0x03
 #define CMD_GET_COUNTER 0x04
 
 /*****************************************************************************
- * 设备描述符
+ * Device Descriptor
  *****************************************************************************/
 
 static const struct usb_device_descriptor bulk_dev_desc = {
@@ -61,7 +61,7 @@ static const struct usb_device_descriptor bulk_dev_desc = {
 };
 
 /*****************************************************************************
- * 配置描述符
+ * Configuration Descriptor
  *****************************************************************************/
 
 struct bulk_config_desc
@@ -117,7 +117,7 @@ static const struct bulk_config_desc bulk_cfg_desc = {
 };
 
 /*****************************************************************************
- * 字符串描述符
+ * String Descriptors
  *****************************************************************************/
 
 static const uint8_t string0_desc[] = {0x04, USB_DT_STRING, 0x09, 0x04};
@@ -131,7 +131,7 @@ static const uint8_t string2_desc[] = {
 static const uint8_t* bulk_string_descs[] = {string1_desc, string2_desc, string0_desc};
 
 /*****************************************************************************
- * 虚拟 Bulk 设备状态
+ * Virtual Bulk Device State
  *****************************************************************************/
 
 struct virtual_bulk
@@ -147,76 +147,83 @@ struct virtual_bulk
 static struct virtual_bulk vbulk;
 
 /*****************************************************************************
- * 静态函数声明
+ * Static Function Declarations
  *****************************************************************************/
 
 /**
- * vbulk_handle_urb - 处理 URB 请求
- * @driver: 设备驱动指针
- * @urb_cmd: URB 命令
- * @urb_ret: URB 返回
- * @data_out: 输出数据指针
- * @data_len: 输出数据长度
- * @urb_data: URB 数据
- * @urb_data_len: URB 数据长度
- * Return: 1 成功，-1 错误
+ * vbulk_handle_urb - Handle URB request
+ * @driver: Device driver pointer
+ * @urb_cmd: URB command
+ * @urb_ret: URB return
+ * @data_out: Output data pointer
+ * @data_len: Output data length
+ * @urb_data: URB data
+ * @urb_data_len: URB data length
+ * Return: 1 on success, -1 on error
  */
 static int vbulk_handle_urb(struct usbip_device_driver* driver, const struct usbip_header* urb_cmd,
                             struct usbip_header* urb_ret, void** data_out, size_t* data_len,
                             const void* urb_data, size_t urb_data_len);
 
 /**
- * vbulk_get_device_list - 获取设备列表
- * @driver: 设备驱动指针
- * @devices: 设备数组输出指针
- * @count: 设备数量输出指针
- * Return: 0 成功，-1 错误
+ * vbulk_get_device_count - Get number of devices
+ * @driver: Device driver pointer
+ * Return: Number of devices
  */
-static int vbulk_get_device_list(struct usbip_device_driver* driver,
-                                 struct usbip_usb_device** devices, int* count);
+static int vbulk_get_device_count(struct usbip_device_driver* driver);
 
 /**
- * vbulk_get_device - 根据总线ID获取设备信息
- * @driver: 设备驱动指针
- * @busid: 总线ID
- * Return: 设备指针，未找到返回 NULL
+ * vbulk_get_device_by_index - Get device by index
+ * @driver: Device driver pointer
+ * @index: Device index
+ * @device: Output device info
+ * Return: 0 on success, -1 on error
+ */
+static int vbulk_get_device_by_index(struct usbip_device_driver* driver, int index,
+                                     struct usbip_usb_device* device);
+
+/**
+ * vbulk_get_device - Get device info by bus ID
+ * @driver: Device driver pointer
+ * @busid: Bus ID
+ * Return: Device pointer, NULL if not found
  */
 static const struct usbip_usb_device* vbulk_get_device(struct usbip_device_driver* driver,
                                                        const char* busid);
 
 /**
- * vbulk_export_device - 导出设备
- * @driver: 设备驱动指针
- * @busid: 总线ID
- * @ctx: 连接上下文
- * Return: 0 成功，-1 错误
+ * vbulk_export_device - Export device
+ * @driver: Device driver pointer
+ * @busid: Bus ID
+ * @ctx: Connection context
+ * Return: 0 on success, -1 on error
  */
 static int vbulk_export_device(struct usbip_device_driver* driver, const char* busid,
                                struct usbip_conn_ctx* ctx);
 
 /**
- * vbulk_unexport_device - 取消导出设备
- * @driver: 设备驱动指针
- * @busid: 总线ID
- * Return: 0 成功，-1 错误
+ * vbulk_unexport_device - Unexport device
+ * @driver: Device driver pointer
+ * @busid: Bus ID
+ * Return: 0 on success, -1 on error
  */
 static int vbulk_unexport_device(struct usbip_device_driver* driver, const char* busid);
 
 /**
- * vbulk_init - 初始化驱动
- * @driver: 设备驱动指针
- * Return: 0 成功，-1 错误
+ * vbulk_init - Initialize driver
+ * @driver: Device driver pointer
+ * Return: 0 on success, -1 on error
  */
 static int vbulk_init(struct usbip_device_driver* driver);
 
 /**
- * vbulk_cleanup - 清理驱动资源
- * @driver: 设备驱动指针
+ * vbulk_cleanup - Cleanup driver resources
+ * @driver: Device driver pointer
  */
 static void vbulk_cleanup(struct usbip_device_driver* driver);
 
 /*****************************************************************************
- * URB 处理
+ * URB Handling
  *****************************************************************************/
 
 static int vbulk_handle_urb(struct usbip_device_driver* driver, const struct usbip_header* urb_cmd,
@@ -249,7 +256,7 @@ static int vbulk_handle_urb(struct usbip_device_driver* driver, const struct usb
 
     if (ep == 0)
     {
-        /* 控制传输 */
+        /* Control transfer */
         const struct usb_setup_packet* setup =
             (const struct usb_setup_packet*)urb_cmd->u.cmd_submit.setup;
 
@@ -259,7 +266,7 @@ static int vbulk_handle_urb(struct usbip_device_driver* driver, const struct usb
                 switch (setup->wValue >> 8)
                 {
                     case USB_DT_DEVICE:
-                        *data_out = malloc(USB_DT_DEVICE_SIZE);
+                        *data_out = osal_malloc(USB_DT_DEVICE_SIZE);
                         if (*data_out)
                         {
                             memcpy(*data_out, &bulk_dev_desc, USB_DT_DEVICE_SIZE);
@@ -267,7 +274,7 @@ static int vbulk_handle_urb(struct usbip_device_driver* driver, const struct usb
                         }
                         break;
                     case USB_DT_CONFIG:
-                        *data_out = malloc(sizeof(bulk_cfg_desc));
+                        *data_out = osal_malloc(sizeof(bulk_cfg_desc));
                         if (*data_out)
                         {
                             memcpy(*data_out, &bulk_cfg_desc, sizeof(bulk_cfg_desc));
@@ -278,7 +285,7 @@ static int vbulk_handle_urb(struct usbip_device_driver* driver, const struct usb
                         uint8_t idx = setup->wValue & 0xFF;
                         if (idx == 0)
                         {
-                            *data_out = malloc(sizeof(string0_desc));
+                            *data_out = osal_malloc(sizeof(string0_desc));
                             if (*data_out)
                             {
                                 memcpy(*data_out, string0_desc, sizeof(string0_desc));
@@ -288,7 +295,7 @@ static int vbulk_handle_urb(struct usbip_device_driver* driver, const struct usb
                         else if (idx <= 3)
                         {
                             const uint8_t* s = bulk_string_descs[idx - 1];
-                            *data_out = malloc(s[0]);
+                            *data_out = osal_malloc(s[0]);
                             if (*data_out)
                             {
                                 memcpy(*data_out, s, s[0]);
@@ -317,7 +324,7 @@ static int vbulk_handle_urb(struct usbip_device_driver* driver, const struct usb
     else if (ep == 1 && urb_cmd->base.direction == USBIP_DIR_IN)
     {
         /* Bulk IN */
-        *data_out = malloc(BULK_BUFFER_SIZE);
+        *data_out = osal_malloc(BULK_BUFFER_SIZE);
         if (*data_out)
         {
             memcpy(*data_out, vbulk.buffer, BULK_BUFFER_SIZE);
@@ -328,7 +335,7 @@ static int vbulk_handle_urb(struct usbip_device_driver* driver, const struct usb
     }
     else if (ep == 2 && urb_cmd->base.direction == USBIP_DIR_OUT)
     {
-        /* Bulk OUT - 处理命令 */
+        /* Bulk OUT - handle command */
         if (urb_data && urb_data_len > 0)
         {
             const uint8_t* cmd = urb_data;
@@ -356,28 +363,33 @@ static int vbulk_handle_urb(struct usbip_device_driver* driver, const struct usb
 }
 
 /*****************************************************************************
- * 设备枚举接口
+ * Device Enumeration Interface
  *****************************************************************************/
 
-static int vbulk_get_device_list(struct usbip_device_driver* driver,
-                                 struct usbip_usb_device** devices, int* count)
+static int vbulk_get_device_count(struct usbip_device_driver* driver)
 {
     (void)driver;
 
     if (vbulk.udev.busid[0] == '\0' || usbip_is_device_busy(vbulk.udev.busid))
     {
-        *devices = NULL;
-        *count = 0;
         return 0;
     }
 
-    struct usbip_usb_device* devs = calloc(1, sizeof(*devs));
-    if (!devs)
-        return -1;
+    return 1;
+}
 
-    memcpy(devs, &vbulk.udev, sizeof(*devs));
-    *devices = devs;
-    *count = 1;
+static int vbulk_get_device_by_index(struct usbip_device_driver* driver, int index,
+                                     struct usbip_usb_device* device)
+{
+    (void)driver;
+
+    if (index != 0 || vbulk.udev.busid[0] == '\0' || usbip_is_device_busy(vbulk.udev.busid))
+    {
+        return -1;
+    }
+
+    memcpy(device, &vbulk.udev, sizeof(*device));
+
     return 0;
 }
 
@@ -426,7 +438,7 @@ static int vbulk_unexport_device(struct usbip_device_driver* driver, const char*
 }
 
 /*****************************************************************************
- * 初始化与清理
+ * Initialization and Cleanup
  *****************************************************************************/
 
 static int vbulk_init(struct usbip_device_driver* driver)
@@ -462,12 +474,13 @@ static void vbulk_cleanup(struct usbip_device_driver* driver)
 }
 
 /*****************************************************************************
- * 驱动定义
+ * Driver Definition
  *****************************************************************************/
 
 struct usbip_device_driver virtual_bulk_driver = {
     .name = "virtual-bulk",
-    .get_device_list = vbulk_get_device_list,
+    .get_device_count = vbulk_get_device_count,
+    .get_device_by_index = vbulk_get_device_by_index,
     .get_device = vbulk_get_device,
     .export_device = vbulk_export_device,
     .unexport_device = vbulk_unexport_device,

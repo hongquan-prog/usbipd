@@ -188,7 +188,7 @@ The `write()` method releases `read_sem` before writing data to the endpoint, ca
 
 ```c
 // 修改前：返回固定 64 字节
-*data_out = malloc(DAP_REPORT_SIZE);
+*data_out = osal_malloc(DAP_REPORT_SIZE);
 memset(*data_out, 0, DAP_REPORT_SIZE);
 memcpy(*data_out, vdap.response, vdap.response_len);
 *data_len = DAP_REPORT_SIZE;
@@ -196,7 +196,7 @@ urb_ret->u.ret_submit.actual_length = DAP_REPORT_SIZE;
 
 // 修改后：返回实际长度
 size_t actual_len = vdap.response_len;
-*data_out = malloc(actual_len);
+*data_out = osal_malloc(actual_len);
 memcpy(*data_out, vdap.response, actual_len);
 *data_len = actual_len;
 urb_ret->u.ret_submit.actual_length = actual_len;

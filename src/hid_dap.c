@@ -5,19 +5,18 @@
  *
  * Change Logs:
  * Date           Author       Notes
- * 2026-9-8      hongquan.li   add license declaration
+ * 2026-3-24      hongquan.li   add license declaration
  */
 
 /*
  * Virtual CMSIS-DAP HID Device
  *
- * 通过 USBIP 虚拟一个 CMSIS-DAP 调试探针
- * 使用树莓派 GPIO 实现 SWD/JTAG 调试接口
+ * Virtual CMSIS-DAP debug probe via USBIP
+ * Uses Raspberry Pi GPIO for SWD/JTAG debugging
  */
 
 #include <errno.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "DAP.h"
@@ -32,7 +31,7 @@
 LOG_MODULE_REGISTER(dap, CONFIG_DAP_LOG_LEVEL);
 
 /**************************************************************************
- * DAP 设备配置
+ * DAP Device Configuration
  **************************************************************************/
 
 #define DAP_VID 0xFAED
@@ -40,7 +39,7 @@ LOG_MODULE_REGISTER(dap, CONFIG_DAP_LOG_LEVEL);
 #define DAP_REPORT_SIZE 64
 
 /**************************************************************************
- * BOS Descriptor - 包含 Microsoft OS 2.0 Platform Capability
+ * BOS Descriptor - Contains Microsoft OS 2.0 Platform Capability
  **************************************************************************/
 
 #define MS_OS_20_VENDOR_CODE 0x01
@@ -95,7 +94,7 @@ static const uint8_t dap_msos20_desc[] = {
 /* clang-format on */
 
 /**************************************************************************
- * DAP 报告描述符
+ * DAP Report Descriptor
  **************************************************************************/
 
 static const uint8_t dap_report_desc[] = {
@@ -126,7 +125,7 @@ static const uint8_t dap_report_desc[] = {
     0xC0};
 
 /**************************************************************************
- * USB 描述符
+ * USB Descriptors
  **************************************************************************/
 
 static const struct usb_device_descriptor dap_dev_desc = {
@@ -210,23 +209,25 @@ static const struct dap_config_desc dap_cfg_desc = {
 };
 
 /**************************************************************************
- * 字符串描述符
+ * String Descriptors
  **************************************************************************/
 
+/* clang-format off */
 static const uint8_t string0_desc[] = {0x04, USB_DT_STRING, 0x09, 0x04};
 static const uint8_t string1_desc[] = {0x0C, USB_DT_STRING, 'R', 0, 'P', 0, 'I', 0, '5', 0};
-static const uint8_t string2_desc[] = {
-    0x1C, USB_DT_STRING, 'H', 0,   'I', 0,   'D', 0,   ' ', 0,   'C', 0,   'M', 0, 'S',
-    0,    'I',           0,   'S', 0,   '-', 0,   'D', 0,   'A', 0,   'P', 0};
-
+static const uint8_t string2_desc[] = {0x1C, USB_DT_STRING, 
+    'H', 0, 'I', 0, 'D', 0, ' ', 0, 'C', 0, 'M', 0, 'S',
+     0, 'I', 0, 'S', 0, '-', 0, 'D', 0, 'A', 0, 'P', 0};
 /* String 3: Serial Number - "0000001" = 7 chars, len = 2 + 7*2 = 16 = 0x10 */
-static const uint8_t string3_desc[] = {0x10, USB_DT_STRING, '0', 0,   '0', 0,   '0', 0, '0',
-                                       0,    '0',           0,   '0', 0,   '1', 0};
+static const uint8_t string3_desc[] = {0x10, USB_DT_STRING, 
+                                      '0', 0, '0', 0, '0', 0, '0',
+                                       0, '0', 0, '0', 0, '1', 0};
+/* clang-format on */
 
 static const uint8_t* dap_string_descs[] = {string1_desc, string2_desc, string3_desc};
 
 /**************************************************************************
- * DAP 设备状态
+ * DAP Device State
  **************************************************************************/
 
 struct virtual_dap
@@ -238,7 +239,7 @@ struct virtual_dap
     int exported;
     struct usbip_conn_ctx* ctx;
 
-    /* DAP 响应缓冲区 */
+    /* DAP Response Buffer */
     uint8_t response[DAP_REPORT_SIZE];
     size_t response_len;
     int response_pending;
@@ -247,19 +248,20 @@ struct virtual_dap
 
 static struct virtual_dap vdap;
 
-/* DAP 命令处理 */
+/* DAP Command Processing */
 static int dap_handle_data(uint8_t report_id, const void* data, size_t len, void* user_data);
 
-/* HID 回调实现 */
+/* HID Callback Implementation */
 static int dap_get_report(uint8_t report_type, uint8_t report_id, void* data, size_t* len,
                           void* user_data);
 
-/* URB 和设备管理 */
+/* URB and Device Management */
 static int vdap_handle_urb(struct usbip_device_driver* driver, const struct usbip_header* urb_cmd,
                            struct usbip_header* urb_ret, void** data_out, size_t* data_len,
                            const void* urb_data, size_t urb_data_len);
-static int vdap_get_device_list(struct usbip_device_driver* driver,
-                                struct usbip_usb_device** devices, int* count);
+static int vdap_get_device_count(struct usbip_device_driver* driver);
+static int vdap_get_device_by_index(struct usbip_device_driver* driver, int index,
+                                    struct usbip_usb_device* device);
 static const struct usbip_usb_device* vdap_get_device(struct usbip_device_driver* driver,
                                                       const char* busid);
 static int vdap_export_device(struct usbip_device_driver* driver, const char* busid,
@@ -269,7 +271,7 @@ static int vdap_init(struct usbip_device_driver* driver);
 static void vdap_cleanup(struct usbip_device_driver* driver);
 
 /**************************************************************************
- * HID 回调实现
+ * HID Callback Implementation
  **************************************************************************/
 
 static const struct hid_device_ops dap_hid_ops = {
@@ -282,9 +284,9 @@ static const struct hid_device_ops dap_hid_ops = {
 };
 
 /**
- * dap_handle_data - 处理 HID OUT 数据
+ * dap_handle_data - Handle HID OUT data
  *
- * 这个函数由 HID 框架调用，数据已经过 Report ID 规范化处理
+ * This function is called by the HID framework, data has been normalized with Report ID
  */
 static int dap_handle_data(uint8_t report_id, const void* data, size_t len, void* user_data)
 {
@@ -324,9 +326,9 @@ static int dap_handle_data(uint8_t report_id, const void* data, size_t len, void
 }
 
 /**
- * dap_get_report - 获取 HID 报告
+ * dap_get_report - Get HID report
  *
- * 用于响应 GET_REPORT 请求
+ * Used to respond to GET_REPORT requests
  */
 static int dap_get_report(uint8_t report_type, uint8_t report_id, void* data, size_t* len,
                           void* user_data)
@@ -343,7 +345,7 @@ static int dap_get_report(uint8_t report_type, uint8_t report_id, void* data, si
         return -1;
     }
 
-    /* 返回缓存的响应数据，剩余部分填0 */
+    /* Return cached response data, fill remaining with 0 */
     if (vdap.response_pending)
     {
         copy_len = vdap.response_len < report_size ? vdap.response_len : report_size;
@@ -355,17 +357,16 @@ static int dap_get_report(uint8_t report_type, uint8_t report_id, void* data, si
     }
     else
     {
-        /* 没有响应数据时返回空报告 */
+        /* Return empty report when no response data */
         memset(data, 0, report_size);
     }
 
-    /* 总是返回完整报告大小 */
     *len = report_size;
     return 0;
 }
 
 /**************************************************************************
- * URB 处理
+ * URB Processing
  **************************************************************************/
 
 static int vdap_handle_urb(struct usbip_device_driver* driver, const struct usbip_header* urb_cmd,
@@ -400,13 +401,14 @@ static int vdap_handle_urb(struct usbip_device_driver* driver, const struct usbi
             {
                 setup = (const struct usb_setup_packet*)urb_cmd->u.cmd_submit.setup;
 
-                /* 检查是否是 Microsoft OS 2.0 厂商请求 */
+                /* Check if this is a Microsoft OS 2.0 vendor request */
                 if (USB_SETUP_TYPE(setup) == 0x02 && USB_SETUP_IS_IN(setup) &&
                     setup->bRequest == MS_OS_20_VENDOR_CODE)
                 {
-                    if (setup->wIndex == 0x0007) /* MS_OS_20_DESCRIPTOR_INDEX */
+                    /* MS_OS_20_DESCRIPTOR_INDEX */
+                    if (setup->wIndex == 0x0007)
                     {
-                        *data_out = malloc(sizeof(dap_msos20_desc));
+                        *data_out = osal_malloc(sizeof(dap_msos20_desc));
                         if (*data_out)
                         {
                             memcpy(*data_out, dap_msos20_desc, sizeof(dap_msos20_desc));
@@ -473,8 +475,8 @@ static int vdap_handle_urb(struct usbip_device_driver* driver, const struct usbi
             {
                 if (vdap.response_pending)
                 {
-                    /* 返回实际响应长度，不填充到64字节 */
-                    *data_out = malloc(vdap.response_len);
+                    /* Return actual response length, not padded to 64 bytes */
+                    *data_out = osal_malloc(vdap.response_len);
                     if (*data_out)
                     {
                         memcpy(*data_out, vdap.response, vdap.response_len);
@@ -489,7 +491,7 @@ static int vdap_handle_urb(struct usbip_device_driver* driver, const struct usbi
                 }
                 else
                 {
-                    /* 无响应时延迟1ms，优化PyOCD响应 */
+                    /* Delay 1ms when no response to optimize PyOCD response */
                     osal_sleep_ms(1);
                     *data_out = NULL;
                     *data_len = 0;
@@ -520,32 +522,33 @@ static int vdap_handle_urb(struct usbip_device_driver* driver, const struct usbi
 }
 
 /**************************************************************************
- * 设备枚举接口
+ * Device Enumeration Interface
  **************************************************************************/
 
-static int vdap_get_device_list(struct usbip_device_driver* driver,
-                                struct usbip_usb_device** devices, int* count)
+static int vdap_get_device_count(struct usbip_device_driver* driver)
 {
-    struct usbip_usb_device* devs;
-
     (void)driver;
-    *devices = NULL;
-    *count = 0;
 
     if (vdap.udev.busid[0] == '\0' || usbip_is_device_busy(vdap.udev.busid))
     {
         return 0;
     }
 
-    devs = calloc(1, sizeof(*devs));
-    if (!devs)
+    return 1;
+}
+
+static int vdap_get_device_by_index(struct usbip_device_driver* driver, int index,
+                                    struct usbip_usb_device* device)
+{
+    (void)driver;
+
+    if (index != 0 || vdap.udev.busid[0] == '\0' || usbip_is_device_busy(vdap.udev.busid))
     {
         return -1;
     }
 
-    memcpy(devs, &vdap.udev, sizeof(*devs));
-    *devices = devs;
-    *count = 1;
+    memcpy(device, &vdap.udev, sizeof(*device));
+
     return 0;
 }
 
@@ -597,7 +600,7 @@ static int vdap_unexport_device(struct usbip_device_driver* driver, const char* 
 }
 
 /**************************************************************************
- * 初始化与清理
+ * Initialization and Cleanup
  **************************************************************************/
 
 static int vdap_init(struct usbip_device_driver* driver)
@@ -646,12 +649,13 @@ static void vdap_cleanup(struct usbip_device_driver* driver)
 }
 
 /**************************************************************************
- * 驱动定义
+ * Driver Definition
  **************************************************************************/
 
 struct usbip_device_driver virtual_dap_driver = {
     .name = "virtual-dap",
-    .get_device_list = vdap_get_device_list,
+    .get_device_count = vdap_get_device_count,
+    .get_device_by_index = vdap_get_device_by_index,
     .get_device = vdap_get_device,
     .export_device = vdap_export_device,
     .unexport_device = vdap_unexport_device,

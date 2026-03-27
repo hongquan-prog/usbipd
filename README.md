@@ -22,7 +22,7 @@ A USBIP server implementation with three-layer architecture, running on Raspberr
          │             │             │
          ▼             ▼             ▼
 ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
-│transport_tcp│ │usbip_proto.c│ │ virtual_*   │
+│transport_tcp│ │usbip_proto.c│ │hid_dap/bulk_dap│
 │    .c       │ │             │ │    .c       │
 └─────────────┘ └─────────────┘ └─────────────┘
 ```
@@ -235,28 +235,6 @@ sudo usbip attach -r localhost -b 2-2
 ```bash
 ./test_flash.sh test/LED.hex pyocd bulk
 ./test_flash.sh test/LED.hex pyocd hid
-```
-
----
-
-## Add Custom Device
-
-Implement the interface defined in `usbip_devmgr.h`:
-
-```c
-struct usbip_device_driver my_driver = {
-    .name = "my-device",
-    .init = my_init,
-    .cleanup = my_cleanup,
-    .get_device_list = my_get_device_list,
-    .get_device = my_get_device,
-    .export_device = my_export_device,
-    .unexport_device = my_unexport_device,
-    .handle_urb = my_handle_urb,
-};
-
-// Register driver
-usbip_register_driver(&my_driver);
 ```
 
 ---

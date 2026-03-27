@@ -5,18 +5,17 @@
  *
  * Change Logs:
  * Date           Author       Notes
- * 2026-9-8      hongquan.li   add license declaration
+ * 2026-3-24      hongquan.li   add license declaration
  */
 
 /*
  * URB Handler with Static Memory
  *
- * 使用静态内存池处理 URB，满足 10KB 内存限制
+ * Use static memory pool for URB processing, meeting 10KB memory limit
  */
 #include <endian.h>
 #include <errno.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "hal/usbip_log.h"
@@ -28,7 +27,7 @@
 LOG_MODULE_REGISTER(urb, CONFIG_URB_LOG_LEVEL);
 
 /*****************************************************************************
- * 静态 URB 队列（约 2KB）
+ * Static URB Queue (~2KB)
  *****************************************************************************/
 
 struct urb_slot
@@ -51,13 +50,13 @@ struct urb_queue
 };
 
 /*****************************************************************************
- * 全局 URB 队列（静态分配）
+ * Global URB Queue (Statically Allocated)
  *****************************************************************************/
 
 static struct urb_queue g_urb_queue;
 
 /*****************************************************************************
- * URB 队列操作
+ * URB Queue Operations
  *****************************************************************************/
 
 static int usbip_urb_queue_init(struct urb_queue* q)
@@ -96,12 +95,11 @@ static int usbip_urb_queue_push(struct urb_queue* q, const struct usbip_header* 
     if (data_len > USBIP_URB_DATA_MAX_SIZE)
     {
         LOG_ERR("URB data size %zu exceeds max %d", data_len, USBIP_URB_DATA_MAX_SIZE);
-        return -1; /* 数据太大 */
+        return -1;
     }
 
     osal_mutex_lock(&q->lock);
 
-    /* 等待空间 */
     while (((q->tail + 1) % USBIP_URB_QUEUE_SIZE) == q->head && !q->closed)
     {
         osal_cond_wait(&q->not_full, &q->lock);
@@ -113,7 +111,7 @@ static int usbip_urb_queue_push(struct urb_queue* q, const struct usbip_header* 
         return -1;
     }
 
-    /* 复制数据到静态槽位 */
+    /* Copy data to static slot */
     struct urb_slot* slot = &q->slots[q->tail];
     memcpy(&slot->header, header, sizeof(*header));
     if (data && data_len > 0)
@@ -135,7 +133,7 @@ static int usbip_urb_queue_pop(struct urb_queue* q, struct usbip_header* header,
 {
     osal_mutex_lock(&q->lock);
 
-    /* 等待数据 */
+    /* Wait for data */
     while (q->head == q->tail && !q->closed)
     {
         osal_cond_wait(&q->not_empty, &q->lock);
@@ -144,7 +142,7 @@ static int usbip_urb_queue_pop(struct urb_queue* q, struct usbip_header* header,
     if (q->head == q->tail)
     {
         osal_mutex_unlock(&q->lock);
-        return -1; /* 队列空且已关闭 */
+        return -1;
     }
 
     struct urb_slot* slot = &q->slots[q->head];
@@ -174,7 +172,7 @@ static void usbip_urb_queue_close(struct urb_queue* q)
 }
 
 /*****************************************************************************
- * URB 处理上下文
+ * URB Processing Context
  *****************************************************************************/
 
 struct urb_context
@@ -183,17 +181,13 @@ struct urb_context
     struct usbip_device_driver* driver;
     const char* busid;
     volatile int* running;
-
-    /* 使用全局静态队列 */
     struct urb_queue* queue;
-
-    /* 处理线程 */
     struct osal_thread processor_thread;
     int processor_started;
 };
 
 /*****************************************************************************
- * URB 响应发送
+ * URB Response Sending
  *****************************************************************************/
 
 static int usbip_urb_send_reply(struct usbip_conn_ctx* ctx, struct usbip_header* urb_ret,
@@ -206,7 +200,7 @@ static int usbip_urb_send_reply(struct usbip_conn_ctx* ctx, struct usbip_header*
             urb_ret->base.direction, urb_ret->base.ep, urb_ret->u.ret_submit.status,
             urb_ret->u.ret_submit.actual_length);
 
-    /* 先发送头 */
+    /* Send header first */
     usbip_pack_header(urb_ret, 1);
     n = transport_send(ctx, urb_ret, sizeof(*urb_ret));
     if (n != sizeof(*urb_ret))
@@ -215,7 +209,7 @@ static int usbip_urb_send_reply(struct usbip_conn_ctx* ctx, struct usbip_header*
         return -1;
     }
 
-    /* 发送数据（如果有） */
+    /* Send data (if any) */
     if (data && data_len > 0)
     {
         n = transport_send(ctx, data, data_len);
@@ -230,7 +224,7 @@ static int usbip_urb_send_reply(struct usbip_conn_ctx* ctx, struct usbip_header*
 }
 
 /*****************************************************************************
- * URB 处理线程
+ * URB Processing Thread
  *****************************************************************************/
 
 static void* usbip_urb_processor_thread(void* arg)
@@ -247,7 +241,7 @@ static void* usbip_urb_processor_thread(void* arg)
 
     while (*ctx->running)
     {
-        /* 从队列获取 URB */
+        /* Get URB from queue */
         if (usbip_urb_queue_pop(ctx->queue, &urb_cmd, urb_data, &urb_data_len) < 0)
         {
             break;
@@ -256,7 +250,7 @@ static void* usbip_urb_processor_thread(void* arg)
         LOG_DBG("Processing URB: cmd=%u seq=%u dir=%u ep=%u", urb_cmd.base.command,
                 urb_cmd.base.seqnum, urb_cmd.base.direction, urb_cmd.base.ep);
 
-        /* 调用驱动处理 URB */
+        /* Call driver to process URB */
         data_out = NULL;
         data_len = 0;
         ret = ctx->driver->handle_urb(ctx->driver, &urb_cmd, &urb_ret, &data_out, &data_len,
@@ -265,22 +259,22 @@ static void* usbip_urb_processor_thread(void* arg)
         if (ret < 0)
         {
             LOG_DBG("URB handling error");
-            free(data_out);
+            osal_free(data_out);
             break;
         }
 
-        /* 发送响应 */
+        /* Send response */
         if (ret > 0 || urb_cmd.base.direction == USBIP_DIR_OUT)
         {
             if (usbip_urb_send_reply(ctx->conn, &urb_ret, data_out, data_len) < 0)
             {
                 LOG_ERR("Failed to send URB reply");
-                free(data_out);
+                osal_free(data_out);
                 break;
             }
         }
 
-        free(data_out);
+        osal_free(data_out);
     }
 
     LOG_DBG("URB processor exiting for %s", ctx->busid);
@@ -288,7 +282,7 @@ static void* usbip_urb_processor_thread(void* arg)
 }
 
 /*****************************************************************************
- * URB 处理循环
+ * URB Processing Loop
  *****************************************************************************/
 
 int usbip_urb_loop(struct usbip_conn_ctx* ctx, struct usbip_device_driver* driver,
@@ -302,7 +296,7 @@ int usbip_urb_loop(struct usbip_conn_ctx* ctx, struct usbip_device_driver* drive
 
     LOG_DBG("Entering URB loop for %s", busid);
 
-    /* 初始化上下文 */
+    /* Initialize context */
     memset(&urb_ctx, 0, sizeof(urb_ctx));
     urb_ctx.conn = ctx;
     urb_ctx.driver = driver;
@@ -341,7 +335,6 @@ int usbip_urb_loop(struct usbip_conn_ctx* ctx, struct usbip_device_driver* drive
         LOG_DBG("Received URB: cmd=%u seq=%u devid=%u dir=%u ep=%u", urb_cmd.base.command,
                 urb_cmd.base.seqnum, urb_cmd.base.devid, urb_cmd.base.direction, urb_cmd.base.ep);
 
-        /* 接收 OUT 数据 */
         urb_data_len = 0;
         if (urb_cmd.base.direction == USBIP_DIR_OUT &&
             urb_cmd.u.cmd_submit.transfer_buffer_length > 0)
@@ -366,7 +359,6 @@ int usbip_urb_loop(struct usbip_conn_ctx* ctx, struct usbip_device_driver* drive
         }
     }
 
-    /* 关闭队列并等待处理线程 */
     usbip_urb_queue_close(&g_urb_queue);
     if (urb_ctx.processor_started)
     {

@@ -5,13 +5,13 @@
  *
  * Change Logs:
  * Date           Author       Notes
- * 2026-9-8      hongquan.li   add license declaration
+ * 2026-3-24      hongquan.li   add license declaration
  */
 
 /*
  * USBIP Server Main Program
  *
- * 简化的入口点，使用模块化的服务器核心
+ * Simplified entry point using modular server core
  */
 
 #include <getopt.h>
@@ -95,20 +95,20 @@ int main(int argc, char* argv[])
 
     LOG_INF("USBIP Server v0.2");
 
-    /* 设置信号处理 */
+    /* Setup signal handling */
     setup_signals();
 
-    /* 初始化服务器 */
+    /* Initialize server */
     if (usbip_server_init(port) < 0)
     {
         usbip_server_cleanup();
         return 1;
     }
 
-    /* 运行服务器 */
+    /* Run server */
     usbip_server_run();
 
-    /* 清理 */
+    /* Cleanup */
     usbip_server_cleanup();
 
     LOG_INF("Server stopped");

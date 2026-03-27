@@ -38,6 +38,20 @@ if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     add_compile_options(-Wall -Wextra)
 endif()
 
+# Debug build settings
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_compile_options(-g -O0)
+    message(STATUS "Debug build: -g -O0 enabled")
+    
+    # Address Sanitizer (ASAN)
+    option(ASAN "Enable Address Sanitizer" OFF)
+    if(ASAN)
+        add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
+        add_link_options(-fsanitize=address)
+        message(STATUS "Address Sanitizer (ASAN) enabled")
+    endif()
+endif()
+
 #============================================================================
 # 包含路径
 #============================================================================
