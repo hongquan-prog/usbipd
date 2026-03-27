@@ -347,7 +347,7 @@ static int vdap_v2_handle_urb(struct usbip_device_driver* driver,
                     (const struct usb_setup_packet*)urb_cmd->u.cmd_submit.setup;
 
                 /* Log all control requests */
-                LOG_INF("Control: bmRequestType=0x%02x bRequest=0x%02x wValue=0x%04x wIndex=0x%04x "
+                LOG_DBG("Control: bmRequestType=0x%02x bRequest=0x%02x wValue=0x%04x wIndex=0x%04x "
                         "wLength=%d",
                         setup->bmRequestType, setup->bRequest, setup->wValue, setup->wIndex,
                         setup->wLength);
@@ -356,7 +356,7 @@ static int vdap_v2_handle_urb(struct usbip_device_driver* driver,
                 if (USB_SETUP_TYPE(setup) == 0x02 && /* Vendor type */
                     USB_SETUP_IS_IN(setup))
                 {
-                    LOG_INF("Vendor IN request: bRequest=0x%02x wIndex=0x%04x wValue=0x%04x",
+                    LOG_DBG("Vendor IN request: bRequest=0x%02x wIndex=0x%04x wValue=0x%04x",
                             setup->bRequest, setup->wIndex, setup->wValue);
 
                     if (setup->bRequest == MS_OS_20_VENDOR_CODE)
@@ -364,7 +364,7 @@ static int vdap_v2_handle_urb(struct usbip_device_driver* driver,
                         /* MS_OS_20_DESCRIPTOR_INDEX */
                         if (setup->wIndex == 0x0007)
                         {
-                            LOG_INF("MS OS 2.0 Descriptor request");
+                            LOG_DBG("MS OS 2.0 Descriptor request");
                             *data_out = osal_malloc(sizeof(dap_v2_msos20_desc));
                             if (*data_out)
                             {

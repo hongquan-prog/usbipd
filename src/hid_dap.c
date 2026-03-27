@@ -578,7 +578,7 @@ static int vdap_export_device(struct usbip_device_driver* driver, const char* bu
     vdap.ctx = ctx;
     usbip_set_device_busy(busid);
 
-    LOG_DBG("Exported: %s", busid);
+    LOG_INF("Exported: %s", busid);
     return 0;
 }
 
@@ -595,7 +595,7 @@ static int vdap_unexport_device(struct usbip_device_driver* driver, const char* 
     vdap.ctx = NULL;
     usbip_set_device_available(busid);
 
-    LOG_DBG("Unexported: %s", busid);
+    LOG_INF("Unexported: %s", busid);
     return 0;
 }
 
