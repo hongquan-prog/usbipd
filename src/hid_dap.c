@@ -214,7 +214,7 @@ static const struct dap_config_desc dap_cfg_desc = {
 
 /* clang-format off */
 static const uint8_t string0_desc[] = {0x04, USB_DT_STRING, 0x09, 0x04};
-static const uint8_t string1_desc[] = {0x0C, USB_DT_STRING, 'R', 0, 'P', 0, 'I', 0, '5', 0};
+static const uint8_t string1_desc[] = {0x0A, USB_DT_STRING, 'R', 0, 'P', 0, 'I', 0, '5', 0};
 static const uint8_t string2_desc[] = {0x1C, USB_DT_STRING, 
     'H', 0, 'I', 0, 'D', 0, ' ', 0, 'C', 0, 'M', 0, 'S',
      0, 'I', 0, 'S', 0, '-', 0, 'D', 0, 'A', 0, 'P', 0};
@@ -668,7 +668,7 @@ struct usbip_device_driver virtual_dap_driver = {
  * Auto-Register on Program Startup
  *****************************************************************************/
 
-static void __attribute__((constructor)) hid_dap_driver_register(void)
+void __attribute__((constructor, used)) hid_dap_driver_register(void)
 {
     usbip_register_driver(&virtual_dap_driver);
 }

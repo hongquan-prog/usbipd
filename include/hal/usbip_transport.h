@@ -127,7 +127,7 @@ void transport_register(const char* name, struct usbip_transport* trans);
  * @ops: transport_ops_t variable name
  */
 #define TRANSPORT_REGISTER(platform, ops)                                                          \
-    __attribute__((constructor)) static void transport_register_##platform(void)                   \
+    __attribute__((constructor, used)) void transport_register_##platform(void)                   \
     {                                                                                              \
         transport_register(#platform, &ops);                                                       \
     }

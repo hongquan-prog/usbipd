@@ -90,7 +90,7 @@ const osal_ops_t* osal_get_ops(void);
  * @ops: osal_ops_t variable name
  */
 #define OSAL_REGISTER(platform, ops)                                                               \
-    __attribute__((constructor)) static void osal_register_##platform(void)                        \
+    __attribute__((constructor, used)) void osal_register_##platform(void)                        \
     {                                                                                              \
         osal_register(#platform, &ops);                                                            \
     }
