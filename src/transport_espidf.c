@@ -20,6 +20,7 @@
 #include "lwip/netdb.h"
 #include "lwip/sockets.h"
 
+#include "hal/usbip_osal.h"
 #include "hal/usbip_transport.h"
 
 /*****************************************************************************
@@ -115,8 +116,7 @@ static struct usbip_conn_ctx* tcp_accept(struct usbip_transport* trans)
     setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &opt, sizeof(opt));
 
     /* Create connection context */
-    ctx = calloc(1, sizeof(*ctx));
-
+    ctx = osal_malloc(sizeof(*ctx));
     if (!ctx)
     {
         close(fd);
@@ -124,8 +124,8 @@ static struct usbip_conn_ctx* tcp_accept(struct usbip_transport* trans)
         return NULL;
     }
 
-    conn_priv = calloc(1, sizeof(*conn_priv));
-
+    memset(ctx, 0, sizeof(*ctx));
+    conn_priv = osal_malloc(sizeof(*conn_priv));
     if (!conn_priv)
     {
         osal_free(ctx);
@@ -134,6 +134,7 @@ static struct usbip_conn_ctx* tcp_accept(struct usbip_transport* trans)
         return NULL;
     }
 
+    memset(conn_priv, 0, sizeof(*conn_priv));
     conn_priv->fd = fd;
     ctx->priv = conn_priv;
 
