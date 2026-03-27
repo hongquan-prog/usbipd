@@ -165,7 +165,7 @@ vim .config
 
 # Example: change port and log level
 CONFIG_USBIP_SERVER_PORT=3241
-CONFIG_SERVER_LOG_LEVEL=4
+CONFIG_USBIP_LOG_LEVEL=4
 
 # 2. Regenerate config
 python scripts/gen_config.py

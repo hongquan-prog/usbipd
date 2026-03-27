@@ -26,7 +26,7 @@
 #include "usbip_protocol.h"
 #include "usbip_server.h"
 
-LOG_MODULE_REGISTER(server, CONFIG_SERVER_LOG_LEVEL);
+LOG_MODULE_REGISTER(server, CONFIG_USBIP_LOG_LEVEL);
 
 /*****************************************************************************
  * Global State

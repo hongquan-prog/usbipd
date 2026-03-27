@@ -19,7 +19,7 @@
 #include <string.h>
 #include "hal/usbip_log.h"
 
-LOG_MODULE_REGISTER(devmgr, CONFIG_DEVMGR_LOG_LEVEL);
+LOG_MODULE_REGISTER(devmgr, CONFIG_USBIP_LOG_LEVEL);
 
 /*****************************************************************************
  * Driver Registry

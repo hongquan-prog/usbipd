@@ -18,7 +18,7 @@
 #include <string.h>
 #include "hal/usbip_log.h"
 
-LOG_MODULE_REGISTER(transport, CONFIG_TRANSPORT_LOG_LEVEL);
+LOG_MODULE_REGISTER(transport, CONFIG_USBIP_LOG_LEVEL);
 
 /*****************************************************************************
  * Global Transport Instance

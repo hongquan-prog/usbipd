@@ -21,7 +21,7 @@
 #include "usbip_common.h"
 #include "usbip_hid.h"
 
-LOG_MODULE_REGISTER(hid, CONFIG_HID_LOG_LEVEL);
+LOG_MODULE_REGISTER(hid, CONFIG_DAP_LOG_LEVEL);
 
 /**************************************************************************
  * HID Context Initialization

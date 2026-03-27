@@ -24,7 +24,7 @@
 #include "usbip_common.h"
 #include "usbip_control.h"
 
-LOG_MODULE_REGISTER(control, CONFIG_CONTROL_LOG_LEVEL);
+LOG_MODULE_REGISTER(control, CONFIG_USBIP_LOG_LEVEL);
 
 /*****************************************************************************
  * Default String Descriptors

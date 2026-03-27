@@ -165,7 +165,7 @@ vim .config
 
 # 示例：修改端口和日志级别
 CONFIG_USBIP_SERVER_PORT=3241
-CONFIG_SERVER_LOG_LEVEL=4
+CONFIG_USBIP_LOG_LEVEL=4
 
 # 2. 重新生成配置
 python scripts/gen_config.py

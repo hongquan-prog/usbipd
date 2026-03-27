@@ -21,7 +21,7 @@
 #include "hal/usbip_log.h"
 #include "hal/usbip_osal.h"
 
-LOG_MODULE_REGISTER(osal, CONFIG_OSAL_LOG_LEVEL);
+LOG_MODULE_REGISTER(osal, CONFIG_USBIP_LOG_LEVEL);
 
 /*****************************************************************************
  * Global Variables

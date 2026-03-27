@@ -24,7 +24,7 @@
 #include "usbip_protocol.h"
 #include "usbip_server.h"
 
-LOG_MODULE_REGISTER(urb, CONFIG_URB_LOG_LEVEL);
+LOG_MODULE_REGISTER(urb, CONFIG_USBIP_LOG_LEVEL);
 
 /*****************************************************************************
  * Static URB Queue (~2KB)

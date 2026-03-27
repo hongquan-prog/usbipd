@@ -29,7 +29,7 @@
 #include "usbip_devmgr.h"
 #include "usbip_protocol.h"
 
-LOG_MODULE_REGISTER(dap_v2, CONFIG_BULK_DAP_LOG_LEVEL);
+LOG_MODULE_REGISTER(dap_v2, CONFIG_DAP_LOG_LEVEL);
 
 /*****************************************************************************
  * DAP v2 Device Configuration

@@ -30,7 +30,7 @@ endmenu
 
 menu "Log Configuration"
 
-config LOG_LEVEL
+config USBIP_LOG_LEVEL
     int "Default global log level"
     default 3
     range 0 4
@@ -47,53 +47,8 @@ config MAIN_LOG_LEVEL
     default 3
     range 0 4
 
-config SERVER_LOG_LEVEL
-    int "Server module log level"
-    default 3
-    range 0 4
-
-config URB_LOG_LEVEL
-    int "URB module log level"
-    default 3
-    range 0 4
-
-config DEVMGR_LOG_LEVEL
-    int "Device manager module log level"
-    default 3
-    range 0 4
-
-config CONTROL_LOG_LEVEL
-    int "Control transfer module log level"
-    default 4
-    range 0 4
-
-config OSAL_LOG_LEVEL
-    int "OSAL module log level"
-    default 3
-    range 0 4
-
-config TRANSPORT_LOG_LEVEL
-    int "Transport module log level"
-    default 3
-    range 0 4
-
 config DAP_LOG_LEVEL
-    int "HID DAP module log level"
-    default 3
-    range 0 4
-
-config BULK_DAP_LOG_LEVEL
-    int "Bulk DAP v2 module log level"
-    default 3
-    range 0 4
-
-config HID_LOG_LEVEL
-    int "HID device module log level"
-    default 3
-    range 0 4
-
-config BULK_LOG_LEVEL
-    int "Bulk device module log level"
+    int "DAP-Link log level"
     default 3
     range 0 4
 
