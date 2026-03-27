@@ -55,6 +55,40 @@ config DAP_LOG_LEVEL
 endmenu
 
 #============================================================================
+# Thread Configuration
+#============================================================================
+
+menu "Thread Configuration"
+
+config USB_THREAD_STACK_SIZE
+    int "USB/URB thread stack size (bytes)"
+    default 8192
+    range 2048 65536
+    help
+        Stack size in bytes for USB/URB processing threads.
+        Default is 8192 bytes (8KB).
+        
+        For embedded platforms with limited memory, consider 4096.
+        For complex devices or debugging, may need 16384 or more.
+
+config URB_THREAD_PRIORITY
+    int "URB thread priority"
+    default 0
+    range -10 10
+    help
+        Priority for URB processing thread.
+        Default is 0 (normal priority).
+        
+        Positive values = higher priority (faster response)
+        Negative values = lower priority (better system responsiveness)
+        
+        Note: Actual priority mapping depends on platform:
+        - POSIX: mapped to nice values
+        - FreeRTOS: mapped to task priority
+
+endmenu
+
+#============================================================================
 # Debug Probe GPIO Configuration
 #============================================================================
 

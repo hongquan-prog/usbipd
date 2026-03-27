@@ -278,6 +278,8 @@ static void* usbip_urb_processor_thread(void* arg)
     }
 
     LOG_DBG("URB processor exiting for %s", ctx->busid);
+    osal_thread_delete(&ctx->processor_thread);
+
     return NULL;
 }
 
@@ -312,7 +314,7 @@ int usbip_urb_loop(struct usbip_conn_ctx* ctx, struct usbip_device_driver* drive
     }
 
     /* 启动处理线程 */
-    if (osal_thread_create(&urb_ctx.processor_thread, usbip_urb_processor_thread, &urb_ctx, 0, 0) !=
+    if (osal_thread_create(&urb_ctx.processor_thread, usbip_urb_processor_thread, &urb_ctx, CONFIG_USB_THREAD_STACK_SIZE, CONFIG_URB_THREAD_PRIORITY) !=
         OSAL_OK)
     {
         usbip_urb_queue_destroy(&g_urb_queue);
