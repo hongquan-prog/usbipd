@@ -892,9 +892,6 @@ usbip_register_driver(&virtual_xxx_driver);
 
 ```c
 /* 服务器配置 */
-#define USBIP_DEFAULT_PORT     3240
-#define USBIP_MAX_CLIENTS      16
-#define USBIP_MAX_DRIVERS       8
 #define USBIP_URB_QUEUE_SIZE    8
 #define USBIP_URB_DATA_MAX_SIZE  256
 
