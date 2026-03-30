@@ -1,0 +1,3 @@
+[submodule "components/gdb_server/blackmagic"]
+	path = components/gdb_server/blackmagic
+	url = https://github.com/blackmagic-debug/blackmagic.git
