@@ -25,10 +25,10 @@
 #include "hal/usbip_log.h"
 #include "hal/usbip_osal.h"
 #include "usbip_common.h"
+#include "usbip_conn.h"
 #include "usbip_control.h"
 #include "usbip_devmgr.h"
 #include "usbip_protocol.h"
-#include "usbip_server.h"
 
 LOG_MODULE_REGISTER(dap_v2, CONFIG_DAP_LOG_LEVEL);
 
@@ -42,7 +42,7 @@ LOG_MODULE_REGISTER(dap_v2, CONFIG_DAP_LOG_LEVEL);
 
 /* Compile-time check: BULK_DAP_PACKET_SIZE must not exceed USBIP_URB_DATA_MAX_SIZE */
 #if BULK_DAP_PACKET_SIZE > USBIP_URB_DATA_MAX_SIZE
-#error "BULK_DAP_PACKET_SIZE exceeds USBIP_URB_DATA_MAX_SIZE. Please increase USBIP_URB_DATA_MAX_SIZE in include/usbip_server.h"
+#error "BULK_DAP_PACKET_SIZE exceeds USBIP_URB_DATA_MAX_SIZE. Please increase USBIP_URB_DATA_MAX_SIZE in include/usbip_conn.h"
 #endif
 
 /*****************************************************************************
@@ -260,7 +260,7 @@ struct virtual_dap_v2
     struct usb_control_context ctrl_ctx;
 
     int exported;
-    struct usbip_conn_ctx* ctx;
+    struct usbip_connection* conn;
 
     /* DAP Response Buffer */
     uint8_t response[BULK_DAP_PACKET_SIZE];
@@ -269,21 +269,6 @@ struct virtual_dap_v2
 };
 
 static struct virtual_dap_v2 vdap_v2;
-
-static int vdap_v2_handle_urb(struct usbip_device_driver* driver,
-                              const struct usbip_header* urb_cmd, struct usbip_header* urb_ret,
-                              void** data_out, size_t* data_len, const void* urb_data,
-                              size_t urb_data_len);
-static int vdap_v2_get_device_count(struct usbip_device_driver* driver);
-static int vdap_v2_get_device_by_index(struct usbip_device_driver* driver, int index,
-                                       struct usbip_usb_device* device);
-static const struct usbip_usb_device* vdap_v2_get_device(struct usbip_device_driver* driver,
-                                                         const char* busid);
-static int vdap_v2_export_device(struct usbip_device_driver* driver, const char* busid,
-                                 struct usbip_conn_ctx* ctx);
-static int vdap_v2_unexport_device(struct usbip_device_driver* driver, const char* busid);
-static int vdap_v2_init(struct usbip_device_driver* driver);
-static void vdap_v2_cleanup(struct usbip_device_driver* driver);
 
 /*****************************************************************************
  * DAP Command Processing
@@ -518,7 +503,7 @@ static const struct usbip_usb_device* vdap_v2_get_device(struct usbip_device_dri
 }
 
 static int vdap_v2_export_device(struct usbip_device_driver* driver, const char* busid,
-                                 struct usbip_conn_ctx* ctx)
+                                 struct usbip_connection* conn)
 {
     (void)driver;
 
@@ -528,7 +513,7 @@ static int vdap_v2_export_device(struct usbip_device_driver* driver, const char*
     }
 
     vdap_v2.exported = 1;
-    vdap_v2.ctx = ctx;
+    vdap_v2.conn = conn;
     usbip_set_device_busy(busid);
     /* Set DAP packet size for this device */
     DAP_SetPacketSize(BULK_DAP_PACKET_SIZE);
@@ -547,7 +532,7 @@ static int vdap_v2_unexport_device(struct usbip_device_driver* driver, const cha
     }
 
     vdap_v2.exported = 0;
-    vdap_v2.ctx = NULL;
+    vdap_v2.conn = NULL;
     usbip_set_device_available(busid);
 
     LOG_INF("Unexported: %s", busid);
@@ -587,7 +572,6 @@ static int vdap_v2_init(struct usbip_device_driver* driver)
     vdap_v2.ctrl_ctx.num_configs = 1;
     vdap_v2.ctrl_ctx.bos_desc = dap_v2_bos_desc;
     vdap_v2.ctrl_ctx.bos_desc_len = sizeof(dap_v2_bos_desc);
-
     DAP_Setup();
 
     LOG_INF("Init (VID=%04x PID=%04x) Bulk mode", BULK_DAP_VID, BULK_DAP_PID);

@@ -22,6 +22,7 @@
 #include "hal/usbip_log.h"
 #include "hal/usbip_osal.h"
 #include "usbip_common.h"
+#include "usbip_conn.h"
 #include "usbip_devmgr.h"
 
 LOG_MODULE_REGISTER(bulk, CONFIG_USBIP_LOG_LEVEL);
@@ -138,7 +139,7 @@ struct virtual_bulk
 {
     struct usbip_usb_device udev;
     int exported;
-    struct usbip_conn_ctx* ctx;
+    struct usbip_connection* conn;
     uint8_t config_value;
     uint8_t buffer[BULK_BUFFER_SIZE];
     uint32_t counter;
@@ -195,11 +196,11 @@ static const struct usbip_usb_device* vbulk_get_device(struct usbip_device_drive
  * vbulk_export_device - Export device
  * @driver: Device driver pointer
  * @busid: Bus ID
- * @ctx: Connection context
+ * @conn: Connection context
  * Return: 0 on success, -1 on error
  */
 static int vbulk_export_device(struct usbip_device_driver* driver, const char* busid,
-                               struct usbip_conn_ctx* ctx);
+                               struct usbip_connection* conn);
 
 /**
  * vbulk_unexport_device - Unexport device
@@ -405,7 +406,7 @@ static const struct usbip_usb_device* vbulk_get_device(struct usbip_device_drive
 }
 
 static int vbulk_export_device(struct usbip_device_driver* driver, const char* busid,
-                               struct usbip_conn_ctx* ctx)
+                               struct usbip_connection* conn)
 {
     (void)driver;
     if (strcmp(vbulk.udev.busid, busid) != 0 || vbulk.exported)
@@ -414,7 +415,7 @@ static int vbulk_export_device(struct usbip_device_driver* driver, const char* b
     }
 
     vbulk.exported = 1;
-    vbulk.ctx = ctx;
+    vbulk.conn = conn;
     usbip_set_device_busy(busid);
     LOG_INF("Device exported: %s", busid);
 
@@ -430,7 +431,7 @@ static int vbulk_unexport_device(struct usbip_device_driver* driver, const char*
     }
 
     vbulk.exported = 0;
-    vbulk.ctx = NULL;
+    vbulk.conn = NULL;
     usbip_set_device_available(busid);
     LOG_INF("Device unexported: %s", busid);
 
@@ -461,7 +462,7 @@ static int vbulk_init(struct usbip_device_driver* driver)
     vbulk.udev.bNumConfigurations = bulk_dev_desc.bNumConfigurations;
     vbulk.udev.bNumInterfaces = 1;
     vbulk.exported = 0;
-    vbulk.ctx = NULL;
+    vbulk.conn = NULL;
 
     LOG_INF("Bulk: Initialized custom bulk device");
     return 0;

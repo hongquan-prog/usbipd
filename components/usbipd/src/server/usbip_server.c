@@ -6,12 +6,14 @@
  * Change Logs:
  * Date           Author       Notes
  * 2026-3-24      hongquan.li   add license declaration
+ * 2026-04-09     hongquan.li   Refactor for multi-client support
  */
 
 /*
- * USBIP Server Core
+ * USBIP Server Core - Multi-Client Support
  *
- * Server core logic: connection management, device enumeration
+ * Server core logic: connection management, device enumeration,
+ * multi-client support with per-connection URB processing
  */
 #include <endian.h>
 #include <stdio.h>
@@ -38,8 +40,17 @@ static volatile int s_running = 1;
 static int usbip_server_handle_devlist(struct usbip_conn_ctx* ctx);
 static int usbip_server_handle_import_req(struct usbip_conn_ctx* ctx);
 
-/*
+/*****************************************************************************
  * OP_REQ_DEVLIST Processing
+ *****************************************************************************/
+
+/**
+ * usbip_server_handle_devlist - Handle device list request
+ * @ctx: Connection context
+ *
+ * Sends list of all available devices to client.
+ *
+ * Return: 0 on success, -1 on failure
  */
 static int usbip_server_handle_devlist(struct usbip_conn_ctx* ctx)
 {
@@ -54,12 +65,12 @@ static int usbip_server_handle_devlist(struct usbip_conn_ctx* ctx)
     if (usbip_send_op_common(ctx, OP_REP_DEVLIST, ST_OK) < 0)
     {
         LOG_ERR("Failed to send OP_REP_DEVLIST header");
-
         return -1;
     }
 
     /* Count total devices from all drivers */
-    for (driver = usbip_get_first_driver(); driver != NULL; driver = usbip_get_next_driver(driver))
+    for (driver = usbip_get_first_driver(); driver != NULL;
+         driver = usbip_get_next_driver(driver))
     {
         device_count += driver->get_device_count(driver);
     }
@@ -70,14 +81,14 @@ static int usbip_server_handle_devlist(struct usbip_conn_ctx* ctx)
     if (transport_send(ctx, &reply_count, sizeof(reply_count)) != sizeof(reply_count))
     {
         LOG_ERR("Failed to send device count");
-
         return -1;
     }
 
     LOG_DBG("Sending %d device(s)", device_count);
 
     /* Send each device from all drivers */
-    for (driver = usbip_get_first_driver(); driver != NULL; driver = usbip_get_next_driver(driver))
+    for (driver = usbip_get_first_driver(); driver != NULL;
+         driver = usbip_get_next_driver(driver))
     {
         int drv_count = driver->get_device_count(driver);
 
@@ -93,7 +104,6 @@ static int usbip_server_handle_devlist(struct usbip_conn_ctx* ctx)
             if (transport_send(ctx, &udev, sizeof(udev)) != sizeof(udev))
             {
                 LOG_ERR("Failed to send device");
-
                 return -1;
             }
 
@@ -107,7 +117,6 @@ static int usbip_server_handle_devlist(struct usbip_conn_ctx* ctx)
             if (transport_send(ctx, &iface, sizeof(iface)) != sizeof(iface))
             {
                 LOG_ERR("Failed to send interface");
-
                 return -1;
             }
         }
@@ -117,14 +126,24 @@ static int usbip_server_handle_devlist(struct usbip_conn_ctx* ctx)
 }
 
 /*****************************************************************************
- * OP_REQ_IMPORT Processing
+ * OP_REQ_IMPORT Processing (Multi-Client)
  *****************************************************************************/
 
+/**
+ * usbip_server_handle_import_req - Handle device import request
+ * @ctx: Connection context
+ *
+ * Finds device, checks availability, creates connection and starts URB processing.
+ * For multi-client: non-blocking, returns immediately after starting connection.
+ *
+ * Return: 0 on success (connection started), -1 on failure
+ */
 static int usbip_server_handle_import_req(struct usbip_conn_ctx* ctx)
 {
     char busid[SYSFS_BUS_ID_SIZE];
     struct usbip_device_driver* driver = NULL;
     const struct usbip_usb_device* found_dev = NULL;
+    struct usbip_connection* conn = NULL;
     int found = 0;
 
     /* Receive busid */
@@ -140,7 +159,6 @@ static int usbip_server_handle_import_req(struct usbip_conn_ctx* ctx)
     for (driver = usbip_get_first_driver(); driver != NULL && !found;
          driver = usbip_get_next_driver(driver))
     {
-
         found_dev = driver->get_device(driver, busid);
         if (found_dev)
         {
@@ -156,7 +174,7 @@ static int usbip_server_handle_import_req(struct usbip_conn_ctx* ctx)
         return -1;
     }
 
-    if (usbip_is_device_busy(busid))
+    if (!usbip_is_device_available(busid))
     {
         LOG_WRN("Device busy: %s", busid);
         usbip_send_op_common(ctx, OP_REP_IMPORT, ST_DEV_BUSY);
@@ -181,24 +199,69 @@ static int usbip_server_handle_import_req(struct usbip_conn_ctx* ctx)
         return -1;
     }
 
-    /* Export device */
-    if (driver->export_device(driver, busid, ctx) < 0)
+    /* Create connection for this device */
+    conn = usbip_connection_create(ctx);
+    if (conn == NULL)
     {
-        LOG_ERR("Failed to export device: %s", busid);
+        LOG_ERR("Failed to create connection for device: %s", busid);
         return -1;
     }
 
-    LOG_DBG("Device imported: %s", busid);
+    /* Add to connection manager */
+    if (usbip_conn_manager_add(conn) < 0)
+    {
+        LOG_ERR("Failed to add connection to manager");
+        usbip_connection_destroy(conn);
+        return -1;
+    }
 
-    /* Enter URB processing loop */
-    return usbip_urb_loop(ctx, driver, busid);
+    /* Bind device to connection */
+    if (usbip_bind_device(busid, conn) < 0)
+    {
+        LOG_ERR("Failed to bind device: %s", busid);
+        usbip_conn_manager_remove(conn);
+        usbip_connection_destroy(conn);
+        return -1;
+    }
+
+    /* Export device via driver */
+    if (driver->export_device(driver, busid, conn) < 0)
+    {
+        LOG_ERR("Failed to export device: %s", busid);
+        usbip_unbind_device(busid);
+        usbip_conn_manager_remove(conn);
+        usbip_connection_destroy(conn);
+        return -1;
+    }
+
+    /* Start connection URB processing (non-blocking) */
+    if (usbip_connection_start(conn, driver, busid) < 0)
+    {
+        LOG_ERR("Failed to start connection for device: %s", busid);
+        driver->unexport_device(driver, busid);
+        usbip_unbind_device(busid);
+        usbip_conn_manager_remove(conn);
+        usbip_connection_destroy(conn);
+        return -1;
+    }
+
+    LOG_INF("Device imported and connection started: %s", busid);
+
+    return 0;
 }
 
 /*****************************************************************************
- * Connection Handling
+ * Single Operation Handling (Non-Import)
  *****************************************************************************/
 
-void usbip_server_handle_connection(struct usbip_conn_ctx* ctx)
+/**
+ * usbip_server_handle_single_op - Handle single operation and close connection
+ * @ctx: Connection context
+ *
+ * Handles DEVLIST or failed IMPORT operations, then closes connection.
+ * For successful IMPORT, connection ownership is transferred and not closed here.
+ */
+static void usbip_server_handle_single_op(struct usbip_conn_ctx* ctx)
 {
     struct op_common op;
 
@@ -229,60 +292,111 @@ void usbip_server_handle_connection(struct usbip_conn_ctx* ctx)
     {
         case OP_REQ_DEVLIST:
             usbip_server_handle_devlist(ctx);
+            transport_close(ctx);
             break;
 
         case OP_REQ_IMPORT:
-            usbip_server_handle_import_req(ctx);
+            /* Import transfers connection ownership on success */
+            if (usbip_server_handle_import_req(ctx) < 0)
+            {
+                transport_close(ctx);
+            }
+            /* On success, connection is owned by connection manager */
             break;
 
         default:
             LOG_WRN("Unknown operation: 0x%04x", op.code);
             usbip_send_op_common(ctx, op.code | OP_REPLY, ST_NA);
+            transport_close(ctx);
             break;
     }
-
-    transport_close(ctx);
 }
 
 /*****************************************************************************
- * Server interface
+ * Server Interface
  *****************************************************************************/
 
+/**
+ * usbip_server_init - Initialize server
+ * @port: Listen port
+ *
+ * Initialize transport layer and connection manager.
+ *
+ * Return: 0 on success, -1 on failure
+ */
 int usbip_server_init(uint16_t port)
 {
-    if (transport_listen(port) < 0)
+    /* Initialize connection manager */
+    if (usbip_conn_manager_init() < 0)
     {
-        LOG_ERR("Failed to listen on port %d", port);
+        LOG_ERR("Failed to initialize connection manager");
         return -1;
     }
 
-    LOG_INF("Server listening on port %d", port);
+    /* Start listening */
+    if (transport_listen(port) < 0)
+    {
+        LOG_ERR("Failed to listen on port %d", port);
+        usbip_conn_manager_cleanup();
+        return -1;
+    }
+
+    LOG_INF("Server initialized, listening on port %d", port);
 
     return 0;
 }
 
+/**
+ * usbip_server_run - Run server main loop (Multi-Client)
+ *
+ * Accepts connections and handles them. Each successful IMPORT creates
+ * a persistent connection handled by its own threads.
+ *
+ * Return: 0 on normal exit, -1 on failure
+ */
 int usbip_server_run(void)
 {
     struct usbip_conn_ctx* ctx;
 
+    LOG_INF("Server running (multi-client mode)");
+
     while (s_running)
     {
         ctx = transport_accept();
-        if (ctx)
+        if (ctx == NULL)
         {
-            usbip_server_handle_connection(ctx);
+            continue;
         }
+
+        /* Handle single operation (DEVLIST or IMPORT) */
+        usbip_server_handle_single_op(ctx);
     }
 
     return 0;
 }
 
+/**
+ * usbip_server_stop - Stop server
+ *
+ * Signal server to stop accepting new connections.
+ */
 void usbip_server_stop(void)
 {
     s_running = 0;
 }
 
+/**
+ * usbip_server_cleanup - Cleanup server resources
+ *
+ * Cleanup all connections and transport resources.
+ */
 void usbip_server_cleanup(void)
 {
+    /* Cleanup all active connections */
+    usbip_conn_manager_cleanup();
+
+    /* Destroy transport */
     transport_destroy();
+
+    LOG_INF("Server cleanup complete");
 }

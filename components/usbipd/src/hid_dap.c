@@ -25,6 +25,7 @@
 #include "hal/usbip_osal.h"
 #include "usbip_common.h"
 #include "usbip_control.h"
+#include "usbip_conn.h"
 #include "usbip_devmgr.h"
 #include "usbip_hid.h"
 
@@ -237,7 +238,7 @@ struct virtual_dap
     struct hid_device_ctx hid_ctx;
 
     int exported;
-    struct usbip_conn_ctx* ctx;
+    struct usbip_connection* conn;
 
     /* DAP Response Buffer */
     uint8_t response[HID_DAP_PACKET_SIZE];
@@ -254,21 +255,6 @@ static int dap_handle_data(uint8_t report_id, const void* data, size_t len, void
 /* HID Callback Implementation */
 static int dap_get_report(uint8_t report_type, uint8_t report_id, void* data, size_t* len,
                           void* user_data);
-
-/* URB and Device Management */
-static int vdap_handle_urb(struct usbip_device_driver* driver, const struct usbip_header* urb_cmd,
-                           struct usbip_header* urb_ret, void** data_out, size_t* data_len,
-                           const void* urb_data, size_t urb_data_len);
-static int vdap_get_device_count(struct usbip_device_driver* driver);
-static int vdap_get_device_by_index(struct usbip_device_driver* driver, int index,
-                                    struct usbip_usb_device* device);
-static const struct usbip_usb_device* vdap_get_device(struct usbip_device_driver* driver,
-                                                      const char* busid);
-static int vdap_export_device(struct usbip_device_driver* driver, const char* busid,
-                              struct usbip_conn_ctx* ctx);
-static int vdap_unexport_device(struct usbip_device_driver* driver, const char* busid);
-static int vdap_init(struct usbip_device_driver* driver);
-static void vdap_cleanup(struct usbip_device_driver* driver);
 
 /**************************************************************************
  * HID Callback Implementation
@@ -546,7 +532,7 @@ static const struct usbip_usb_device* vdap_get_device(struct usbip_device_driver
 }
 
 static int vdap_export_device(struct usbip_device_driver* driver, const char* busid,
-                              struct usbip_conn_ctx* ctx)
+                              struct usbip_connection* conn)
 {
     (void)driver;
 
@@ -556,7 +542,7 @@ static int vdap_export_device(struct usbip_device_driver* driver, const char* bu
     }
 
     vdap.exported = 1;
-    vdap.ctx = ctx;
+    vdap.conn = conn;
     usbip_set_device_busy(busid);
     /* Set DAP packet size for this device */
     DAP_SetPacketSize(HID_DAP_PACKET_SIZE);
@@ -575,7 +561,7 @@ static int vdap_unexport_device(struct usbip_device_driver* driver, const char* 
     }
 
     vdap.exported = 0;
-    vdap.ctx = NULL;
+    vdap.conn = NULL;
     usbip_set_device_available(busid);
 
     LOG_INF("Unexported: %s", busid);
@@ -621,7 +607,8 @@ static int vdap_init(struct usbip_device_driver* driver)
     hid_init_ctx(&vdap.hid_ctx, &dap_hid_ops, HID_DAP_PACKET_SIZE, &vdap);
     DAP_Setup();
 
-    LOG_DBG("Init (VID=%04x PID=%04x)", DAP_VID, DAP_PID);
+    LOG_INF("Init (VID=%04x PID=%04x) HID mode", DAP_VID, DAP_PID);
+
     return 0;
 }
 

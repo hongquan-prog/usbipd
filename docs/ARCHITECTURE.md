@@ -19,6 +19,7 @@
 - 模块化设计，各层职责明确
 - 传输层抽象，支持 TCP/串口等多种传输方式
 - 设备驱动框架，易于扩展新设备
+- **多客户端支持**：每设备独立连接和 URB 处理线程
 - 静态内存管理，适用于嵌入式环境
 - 线程安全的 URB 队列处理
 - 带颜色的日志系统
@@ -31,11 +32,21 @@
 | CMSIS-DAP v1 HID | 2-1 | HID 调试设备 |
 | HID 键盘 | 1-1 | 通用 HID 设备 |
 
+### 多客户端支持 (v0.2+)
+
+服务器支持多客户端同时连接不同设备：
+- 每个设备连接有独立的 RX/Processor 双线程
+- 每连接独立的 URB 队列，完全隔离
+- 设备状态绑定到连接，防止重复导出
+- 单个连接断开不影响其他连接
+
 ---
 
 ## 系统架构
 
 ### 整体架构图
+
+**多客户端架构**:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -51,13 +62,14 @@
 │  ┌──────────────────────┴───────────────────────────┐   │
 │  │       USBIP 协议层 (Protocol Layer)            │   │
 │  │  - usbip_protocol.c (协议编解码)             │   │
-│  │  - usbip_server.c (连接管理)                 │   │
+│  │  - usbip_server.c (连接管理/多客户端)        │   │
+│  │  - usbip_conn.c (连接生命周期管理)           │   │
 │  │  - usbip_urb.c (URB 队列处理)               │   │
 │  └──────────────────────┬───────────────────────────┘   │
 │                         │                              │
 │  ┌──────────────────────┴───────────────────────────┐   │
 │  │      设备管理层 (Device Manager Layer)         │   │
-│  │  - usbip_devmgr.c (驱动注册/管理)         │   │
+│  │  - usbip_devmgr.c (驱动注册/设备绑定)       │   │
 │  └──────────────────────┬───────────────────────────┘   │
 │                         │                              │
 │  ┌──────────────────────┴───────────────────────────┐   │
@@ -67,6 +79,28 @@
 │  │  - usbip_hid.c (HID 基类)               │   │
 │  │  - usbip_bulk.c (Bulk 基类)              │   │
 │  └──────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+
+多客户端连接模型:
+┌─────────────────────────────────────────────────────────────┐
+│                    USBIP Server Main                        │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  Connection Acceptor (usbip_server_run)             │   │
+│  │  - Accepts new connections                          │   │
+│  └─────────────────────────┬───────────────────────────┘   │
+│                            │                                │
+│              ┌─────────────┼─────────────┐                 │
+│              ▼             ▼             ▼                 │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐       │
+│  │ Connection 1 │ │ Connection 2 │ │ Connection N │       │
+│  │  (Device A)  │ │  (Device B)  │ │  (Device C)  │       │
+│  │ ┌──────────┐ │ │ ┌──────────┐ │ │ ┌──────────┐ │       │
+│  │ │URB Queue │ │ │ │URB Queue │ │ │ │URB Queue │ │       │
+│  │ │(per-conn)│ │ │ │(per-conn)│ │ │ │(per-conn)│ │       │
+│  │ └──────────┘ │ │ └──────────┘ │ │ └──────────┘ │       │
+│  │  RX Thread   │ │  RX Thread   │ │  RX Thread   │       │
+│  │  Processor   │ │  Processor   │ │  Processor   │       │
+│  └──────────────┘ └──────────────┘ └──────────────┘       │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -131,6 +165,11 @@ static void __attribute__((constructor)) tcp_transport_register(void)
 - 设备枚举请求处理 (`OP_REQ_DEVLIST`)
 - 设备导入请求处理 (`OP_REQ_IMPORT`)
 - URB 收发处理
+- **多客户端连接管理** (`usbip_conn.c`)
+  - 连接生命周期管理 (create/start/stop/destroy)
+  - 每连接 URB 队列管理
+  - RX/Processor 双线程模型
+  - 连接管理器跟踪所有活动连接
 
 **协议常量**:
 ```c
@@ -172,7 +211,7 @@ struct usbip_header {
 
 #### 3. 设备管理层 (Device Manager Layer)
 
-**职责**: 管理设备驱动注册、设备状态跟踪。
+**职责**: 管理设备驱动注册、设备状态跟踪、设备与连接绑定。
 
 **核心接口**: `struct usbip_device_driver`
 
@@ -181,14 +220,15 @@ struct usbip_device_driver {
     const char* name;
 
     /* 设备枚举 */
-    int (*get_device_list)(struct usbip_device_driver* driver,
-                          struct usbip_usb_device** devices, int* count);
+    int (*get_device_count)(struct usbip_device_driver* driver);
+    int (*get_device_by_index)(struct usbip_device_driver* driver, int index,
+                               struct usbip_usb_device* device);
     const struct usbip_usb_device* (*get_device)(struct usbip_device_driver* driver,
                                                  const char* busid);
 
-    /* 设备导入/导出 */
+    /* 设备导入/导出 (多客户端：传入 usbip_connection*) */
     int (*export_device)(struct usbip_device_driver* driver, const char* busid,
-                         struct usbip_conn_ctx* ctx);
+                         struct usbip_connection* conn);
     int (*unexport_device)(struct usbip_device_driver* driver, const char* busid);
 
     /* URB 处理 */
@@ -208,7 +248,8 @@ struct usbip_device_driver {
 - `usbip_register_driver()` - 注册驱动
 - `usbip_unregister_driver()` - 注销驱动
 - `usbip_get_first_driver()` / `usbip_get_next_driver()` - 驱动迭代
-- `usbip_set_device_busy()` / `usbip_set_device_available()` - 设备状态管理
+- `usbip_bind_device()` / `usbip_unbind_device()` - 设备与连接绑定/解绑
+- `usbip_is_device_available()` / `usbip_get_device_owner()` - 设备状态查询
 
 #### 4. 设备驱动层 (Device Driver Layer)
 
@@ -386,6 +427,24 @@ int DAP_SWDP_Transfer(uint8_t request, uint16_t data, uint32_t* response);
    - 使用 `__attribute__((constructor))` 在程序启动时自动调用
    - 创建 transport 实例并注册为全局实例
 
+5. **静态库符号保留** (CMake 配置)
+
+   由于 constructor 函数在静态库中可能被链接器优化掉，需要在 `CMakeLists.txt` 中显式引用:
+
+   ```cmake
+   # components/usbipd/CMakeLists.txt
+   if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+       target_link_options(${COMPONENT_NAME} INTERFACE
+           -Wl,-u,osal_register_posix
+           -Wl,-u,transport_register_tcp
+           -Wl,-u,hid_dap_driver_register
+           -Wl,-u,bulk_dap_driver_register
+       )
+   endif()
+   ```
+
+   `-u` 选项强制链接器包含指定符号，确保 constructor 函数被调用。
+
 **Socket 配置**:
 ```c
 /* TCP_NODELAY - 禁用 Nagle 算法，减少延迟 */
@@ -397,123 +456,113 @@ setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &opt, sizeof(opt));
 
 ### 2. 协议层 - 服务器核心
 
-**文件**: `src/server/usbip_server.c`
+**文件**: `src/server/usbip_server.c`, `src/server/usbip_conn.c`
 
-**服务器启动流程**:
+**多客户端服务器启动流程**:
 
 ```
 main()
-├── transport_listen()           # 通过 wrapper 启动监听
-├── usbip_register_driver()     # 注册设备驱动
-├── usbip_server_init()          # 初始化服务器
-│   ├── setup_signals()          # 设置信号处理
-│   └── transport_listen()       # 开始监听
-└── usbip_server_run()           # 运行主循环
-    ├── poll()                   # 等待连接
-    ├── transport_accept()       # 接受连接
-    └── usbip_server_handle_connection()
-        ├── usbip_recv_op_common()   # 接收操作头
-        ├── usbip_server_handle_devlist()  # 处理设备列表
-        └── usbip_server_handle_import_req()  # 处理设备导入
-            └── usbip_urb_loop()      # 进入 URB 循环
+├── usbip_server_init()              # 初始化服务器
+│   ├── usbip_conn_manager_init()    # 初始化连接管理器
+│   └── transport_listen()           # 开始监听
+└── usbip_server_run()               # 运行主循环 (非阻塞)
+    ├── transport_accept()           # 接受新连接
+    └── usbip_server_handle_single_op()  # 处理单次操作
+        ├── OP_REQ_DEVLIST: 发送设备列表，关闭连接
+        └── OP_REQ_IMPORT: 导入设备，启动连接线程
+            ├── usbip_connection_create()   # 创建连接
+            ├── usbip_conn_manager_add()    # 加入管理器
+            ├── usbip_bind_device()         # 绑定设备
+            ├── driver->export_device()     # 导出设备
+            └── usbip_connection_start()    # 启动 URB 线程
+                ├── 创建 URB 队列
+                ├── 启动 RX 线程
+                └── 启动 Processor 线程
 ```
 
 **连接处理**:
 
-1. **设备列表请求 (`OP_REQ_DEVLIST`)
+1. **设备列表请求 (`OP_REQ_DEVLIST`)**
    - 遍历所有已注册驱动
    - 收集设备信息
    - 发送设备列表给客户端
+   - **关闭连接** (DEVLIST 是单次操作)
 
-2. **设备导入请求 (`OP_REQ_IMPORT`)
+2. **设备导入请求 (`OP_REQ_IMPORT`)**
    - 接收 busid
    - 查找设备
-   - 检查设备状态
-   - 导出设备
-   - 进入 URB 处理循环
+   - 检查设备是否可用 (`usbip_is_device_available`)
+   - 创建连接 (`usbip_connection_create`)
+   - 绑定设备到连接 (`usbip_bind_device`)
+   - 导出设备 (`driver->export_device`)
+   - 启动连接 URB 线程 (`usbip_connection_start`)
+   - **连接所有权转移给连接管理器**
 
-### 3. URB 处理模块
+### 3. URB 处理模块 (多客户端)
 
-**文件**: `src/server/usbip_urb.c`
+**文件**: `src/server/usbip_urb.c`, `src/server/usbip_conn.c`
 
-**双线程架构**:
+**每连接双线程架构**:
+
+每个设备连接有独立的 URB 处理线程组:
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│           接收线程 (Receiver Thread)              │
-│  - usbip_recv_header()                      │
-│  - 接收 OUT 数据                           │
-│  - urb_queue_push()                          │
-└───────────────┬─────────────────────────────────┘
-                │
-                ▼
-        ┌───────────────┐
-        │  URB 队列     │
-        │  (线程安全)    │
-        └───────┬───────┘
-                │
-                ▼
-┌─────────────────────────────────────────────────────────┐
-│         处理线程 (Processor Thread)             │
-│  - urb_queue_pop()                           │
-│  - driver->handle_urb()                    │
-│  - urb_send_reply()                          │
-└─────────────────────────────────────────────────────────┘
-```
-
-**静态 URB 队列**:
-
-```c
-#define USBIP_URB_QUEUE_SIZE  8    /* 队列槽位数 */
-#define USBIP_URB_DATA_MAX_SIZE 256  /* 每个 URB 最大数据 */
-
-struct urb_slot {
-    struct usbip_header header;
-    uint8_t data[USBIP_URB_DATA_MAX_SIZE];
-    size_t data_len;
-    int valid;
-};
-
-struct urb_queue {
-    struct urb_slot slots[USBIP_URB_QUEUE_SIZE];
-    int head;
-    int tail;
-    struct osal_mutex lock;
-    struct osal_cond not_empty;
-    struct osal_cond not_full;
-    int closed;
-};
-```
-
-**队列操作**:
-
-- `urb_queue_push()` - 入队 URB
-  - 等待队列非满条件变量
-  - 复制数据到静态槽位
-  - 通知非空条件变量
-
-- `urb_queue_pop()` - 出队 URB
-  - 等待队列非空条件变量
-  - 从静态槽位复制数据
-  - 通知非满条件变量
-
-**URB 处理循环**:
-
-```c
-usbip_urb_loop()
-├── urb_queue_init()          # 初始化队列
-├── osal_thread_create()       # 启动处理线程
-├── 接收线程循环:
+Connection N
+├── URB Queue (per-connection)
+│   ├── 独立的队列存储 URB
+│   └── 独立的 mutex/cond 同步
+├── RX Thread
 │   ├── usbip_recv_header()
 │   ├── 接收 OUT 数据
-│   └── urb_queue_push()
-└── 处理线程:
-    ├── urb_queue_pop()
+│   └── usbip_urb_queue_push()   # 推入本连接队列
+└── Processor Thread
+    ├── usbip_urb_queue_pop()      # 从本连接队列弹出
     ├── driver->handle_urb()
-    └── urb_send_reply()
+    └── usbip_urb_send_reply()
 ```
 
-### 4. 设备管理器
+**每连接 URB 队列**:
+
+```c
+/* 队列句柄 (不透明指针) */
+struct usbip_conn_urb_queue {
+    void* priv;  /* 指向内部实现 */
+};
+
+/* 队列操作 */
+int usbip_urb_queue_init(struct usbip_conn_urb_queue* q);
+void usbip_urb_queue_destroy(struct usbip_conn_urb_queue* q);
+int usbip_urb_queue_push(struct usbip_conn_urb_queue* q,
+                         const struct usbip_header* header,
+                         const void* data, size_t data_len);
+int usbip_urb_queue_pop(struct usbip_conn_urb_queue* q,
+                        struct usbip_header* header,
+                        void* data, size_t* data_len);
+void usbip_urb_queue_close(struct usbip_conn_urb_queue* q);
+```
+
+**线程生命周期** (由 `usbip_conn.c` 管理):
+
+```c
+usbip_connection_start(conn, driver, busid)
+├── usbip_urb_queue_init(&conn->urb_queue)     # 初始化队列
+├── 启动 Processor Thread
+│   └── usbip_conn_processor_thread()
+│       └── while (conn->running) { usbip_urb_queue_pop(); handle_urb(); }
+├── 启动 RX Thread
+│   └── usbip_conn_rx_thread()
+│       └── while (conn->running) { recv_header(); usbip_urb_queue_push(); }
+└── 标记连接状态 ACTIVE
+
+usbip_connection_stop(conn)
+├── conn->running = 0                          # 通知线程停止
+├── usbip_urb_queue_close()                    # 唤醒等待线程
+├── osal_thread_join(&processor_thread)        # 等待线程结束
+├── osal_thread_join(&rx_thread)               # 等待线程结束
+└── usbip_urb_queue_destroy()                  # 销毁队列
+```
+
+### 4. 设备管理器 (多客户端)
 
 **文件**: `src/server/usbip_devmgr.c`
 
@@ -522,10 +571,26 @@ usbip_urb_loop()
 - 注册时调用 `driver->init()`
 - 注销时调用 `driver->cleanup()`
 
-**设备忙碌状态表**:
+**设备状态表** (多客户端扩展):
 - 最多跟踪 32 个设备
 - 使用 busid 作为键
-- 防止设备被重复导入
+- **新增**: `owner` 字段指向绑定连接
+- **新增**: `state` 字段表示可用/已导出状态
+
+**设备绑定接口**:
+```c
+/* 绑定设备到连接 */
+int usbip_bind_device(const char* busid, struct usbip_connection* conn);
+
+/* 解绑设备 */
+void usbip_unbind_device(const char* busid);
+
+/* 获取设备所有者 */
+struct usbip_connection* usbip_get_device_owner(const char* busid);
+
+/* 检查设备是否可用 */
+int usbip_is_device_available(const char* busid);
+```
 
 ---
 
@@ -686,12 +751,45 @@ struct usbip_transport {
 
 ### 5. 注册表模式 (Registry Pattern)
 
-**应用**: 设备驱动管理
+**应用**: 设备驱动管理、连接管理
 
 ```c
+/* 驱动注册表 */
 static struct usbip_device_driver* driver_registry[MAX_DRIVERS];
-static int driver_count = 0;
+
+/* 连接管理器 */
+static struct {
+    struct usbip_connection* head;
+    struct usbip_connection* tail;
+    struct osal_mutex lock;
+    int active_count;
+    int max_connections;
+} s_conn_manager;
 ```
+
+### 6. 对象池模式 (Object Pool Pattern)
+
+**应用**: 每连接 URB 队列
+
+静态预分配队列槽位，避免动态内存分配:
+```c
+struct urb_queue {
+    struct urb_slot slots[USBIP_URB_QUEUE_SIZE];  /* 静态槽位 */
+    int head;
+    int tail;
+    struct osal_mutex lock;
+    struct osal_cond not_empty;
+    struct osal_cond not_full;
+    int closed;
+};
+```
+
+### 7. 主从线程模式 (Boss-Worker Pattern)
+
+**应用**: 多客户端连接处理
+
+- **主线程 (Boss)**: `usbip_server_run()` 接受连接，创建工作线程
+- **工作线程 (Workers)**: 每连接 RX/Processor 线程处理 URB
 
 ---
 
@@ -797,10 +895,12 @@ static const struct usbip_usb_device* xxx_get_device(
     return NULL;
 }
 
+/* 多客户端：export_device 接收 usbip_connection* 而非 usbip_conn_ctx* */
 static int xxx_export_device(struct usbip_device_driver* driver,
-                            const char* busid, struct usbip_conn_ctx* ctx)
+                            const char* busid, struct usbip_connection* conn)
 {
-    usbip_set_device_busy(busid);
+    /* 存储连接引用 */
+    xxx_device.conn = conn;
     return 0;
 }
 
@@ -851,13 +951,41 @@ struct usbip_device_driver virtual_xxx_driver = {
 };
 ```
 
-2. 在 `main.c` 中注册驱动:
+2. **自动注册** (推荐方式):
 
 ```c
-extern struct usbip_device_driver virtual_xxx_driver;
+/* 驱动文件末尾添加自动注册 */
+extern int usbip_register_driver(struct usbip_device_driver* driver);
 
-/* 在 main() 中 */
-usbip_register_driver(&virtual_xxx_driver);
+static void __attribute__((constructor)) xxx_driver_register(void)
+{
+    usbip_register_driver(&virtual_xxx_driver);
+}
+```
+
+3. **CMake 配置符号保留**:
+
+在 `components/usbipd/CMakeLists.txt` 中添加符号强制引用:
+
+```cmake
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_link_options(${COMPONENT_NAME} INTERFACE
+        -Wl,-u,xxx_driver_register
+    )
+endif()
+```
+
+这确保即使驱动在静态库中，constructor 也能被正确链接。
+
+4. **更新主程序 CMakeLists.txt**:
+
+```cmake
+target_link_libraries(${PROJECT_NAME} PRIVATE pthread usbipd)
+
+# 启用垃圾回收减少二进制体积
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_link_options(${PROJECT_NAME} PRIVATE -Wl,--gc-sections)
+endif()
 ```
 
 ### 内存管理注意事项

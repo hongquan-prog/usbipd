@@ -12,18 +12,19 @@
 #define USBIP_SERVER_H
 
 #include "hal/usbip_transport.h"
+#include "hal/usbip_osal.h"
 #include "usbip_devmgr.h"
 #include "usbip_protocol.h"
+#include "usbip_conn.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /*****************************************************************************
- * Server Configuration
+ * Forward Declarations
  *****************************************************************************/
-#define USBIP_URB_QUEUE_SIZE 8      /* URB queue slots */
-#define USBIP_URB_DATA_MAX_SIZE 512 /* Max data size per URB */
+struct usbip_device_driver;
 
 /*****************************************************************************
  * Server Main Interface
@@ -51,29 +52,6 @@ void usbip_server_stop(void);
  * usbip_server_cleanup - Cleanup server resources
  */
 void usbip_server_cleanup(void);
-
-/*****************************************************************************
- * Connection Handling Interface
- *****************************************************************************/
-
-/**
- * handle_connection - Handle single connection
- * @transport: Transport instance
- * @conn_fd: Connection handle
- *
- * Handle client requests until connection closes
- */
-void handle_connection(struct usbip_transport* transport, int conn_fd);
-
-/**
- * server_urb_loop - URB processing loop
- * @ctx: Connection context
- * @driver: Device driver
- * @busid: Device bus ID
- * Return: 0 normal exit, negative on failure
- */
-int usbip_urb_loop(struct usbip_conn_ctx* ctx, struct usbip_device_driver* driver,
-                   const char* busid);
 
 #ifdef __cplusplus
 }

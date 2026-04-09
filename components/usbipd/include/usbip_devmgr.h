@@ -21,6 +21,12 @@ extern "C" {
 #endif
 
 /*****************************************************************************
+ * Forward Declarations
+ *****************************************************************************/
+
+struct usbip_connection;
+
+/*****************************************************************************
  * Device Driver Abstract Interface
  * Note: Implement this interface to create custom USB devices
  *****************************************************************************/
@@ -63,13 +69,13 @@ struct usbip_device_driver
      * export_device - Export device to remote client
      * @driver: Driver instance
      * @busid: Device bus ID
-     * @ctx: Connection context
+     * @conn: Connection context (for multi-client support)
      * Return: 0 on success, negative on failure
      *
      * After calling, driver takes over URB handling for this connection
      */
     int (*export_device)(struct usbip_device_driver* driver, const char* busid,
-                         struct usbip_conn_ctx* ctx);
+                         struct usbip_connection* conn);
 
     /**
      * unexport_device - Unexport device
@@ -171,6 +177,41 @@ void usbip_set_device_available(const char* busid);
  * Return: 1 busy, 0 available
  */
 int usbip_is_device_busy(const char* busid);
+
+/*****************************************************************************
+ * Device Connection Binding (Multi-Client Support)
+ *****************************************************************************/
+
+/* Forward declaration */
+struct usbip_connection;
+
+/**
+ * usbip_bind_device - Bind device to a connection
+ * @busid: Device bus ID
+ * @conn: Connection that owns the device
+ * Return: 0 on success, -1 if already exported or error
+ */
+int usbip_bind_device(const char* busid, struct usbip_connection* conn);
+
+/**
+ * usbip_unbind_device - Unbind device from its connection
+ * @busid: Device bus ID
+ */
+void usbip_unbind_device(const char* busid);
+
+/**
+ * usbip_get_device_owner - Get connection that owns the device
+ * @busid: Device bus ID
+ * Return: Connection pointer, NULL if not exported
+ */
+struct usbip_connection* usbip_get_device_owner(const char* busid);
+
+/**
+ * usbip_is_device_available - Check if device is available for export
+ * @busid: Device bus ID
+ * Return: 1 if available, 0 if exported
+ */
+int usbip_is_device_available(const char* busid);
 
 #ifdef __cplusplus
 }

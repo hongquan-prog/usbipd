@@ -5,6 +5,7 @@ set(COMPONENT_NAME usbipd)
 
 set(COMPONENT_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/server/usbip_server.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/server/usbip_conn.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/server/usbip_urb.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/server/usbip_devmgr.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/server/usbip_control.c
@@ -29,6 +30,17 @@ target_include_directories(${COMPONENT_NAME}
 )
 
 target_link_libraries(${COMPONENT_NAME} PUBLIC debug_probe)
+
+# Force include constructor symbols when linking this static library
+# These are __attribute__((constructor)) functions that would otherwise be discarded
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_link_options(${COMPONENT_NAME} INTERFACE
+        -Wl,-u,osal_register_posix
+        -Wl,-u,transport_register_tcp
+        -Wl,-u,hid_dap_driver_register
+        -Wl,-u,bulk_dap_driver_register
+    )
+endif()
 
 set_target_properties(${COMPONENT_NAME} PROPERTIES
     C_STANDARD 11
