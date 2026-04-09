@@ -32,7 +32,7 @@ LOG_MODULE_REGISTER(bulk, CONFIG_USBIP_LOG_LEVEL);
  *****************************************************************************/
 
 #define BULK_MAX_PACKET 512
-#define BULK_BUFFER_SIZE 256 /* Satisfy 10KB limit */
+#define BULK_BUFFER_SIZE BULK_MAX_PACKET
 
 /* Custom commands */
 #define CMD_ECHO 0x01
@@ -142,6 +142,7 @@ struct virtual_bulk
     struct usbip_connection* conn;
     uint8_t config_value;
     uint8_t buffer[BULK_BUFFER_SIZE];
+    size_t buffer_len;
     uint32_t counter;
 };
 
@@ -232,7 +233,6 @@ static int vbulk_handle_urb(struct usbip_device_driver* driver, const struct usb
                             const void* urb_data, size_t urb_data_len)
 {
     (void)driver;
-    (void)urb_data;
 
     memset(urb_ret, 0, sizeof(*urb_ret));
     urb_ret->base.command = USBIP_RET_SUBMIT;
@@ -325,13 +325,19 @@ static int vbulk_handle_urb(struct usbip_device_driver* driver, const struct usb
     else if (ep == 1 && urb_cmd->base.direction == USBIP_DIR_IN)
     {
         /* Bulk IN */
-        *data_out = osal_malloc(BULK_BUFFER_SIZE);
+        size_t send_len = vbulk.buffer_len;
+        if (send_len > sizeof(vbulk.buffer))
+        {
+            send_len = sizeof(vbulk.buffer);
+        }
+        *data_out = osal_malloc(send_len);
         if (*data_out)
         {
-            memcpy(*data_out, vbulk.buffer, BULK_BUFFER_SIZE);
-            *data_len = BULK_BUFFER_SIZE;
+            memcpy(*data_out, vbulk.buffer, send_len);
+            *data_len = send_len;
         }
-        urb_ret->u.ret_submit.actual_length = BULK_BUFFER_SIZE;
+
+        urb_ret->u.ret_submit.actual_length = send_len;
         urb_ret->u.ret_submit.status = 0;
     }
     else if (ep == 2 && urb_cmd->base.direction == USBIP_DIR_OUT)
@@ -343,11 +349,18 @@ static int vbulk_handle_urb(struct usbip_device_driver* driver, const struct usb
             switch (cmd[0])
             {
                 case CMD_ECHO:
+                    if (urb_data_len > sizeof(vbulk.buffer))
+                    {
+                        urb_data_len = sizeof(vbulk.buffer);
+                    }
+
                     memcpy(vbulk.buffer, urb_data, urb_data_len);
+                    vbulk.buffer_len = urb_data_len;
                     break;
                 case CMD_GET_COUNTER:
                     vbulk.counter++;
                     memcpy(vbulk.buffer, &vbulk.counter, sizeof(vbulk.counter));
+                    vbulk.buffer_len = sizeof(vbulk.counter);
                     break;
             }
         }
