@@ -101,6 +101,14 @@ void transport_close(struct usbip_conn_ctx* ctx)
     s_transport->close(ctx);
 }
 
+void transport_stop(void)
+{
+    if (s_transport && s_transport->stop)
+    {
+        s_transport->stop(s_transport);
+    }
+}
+
 void transport_destroy(void)
 {
     if (s_transport && s_transport->destroy)

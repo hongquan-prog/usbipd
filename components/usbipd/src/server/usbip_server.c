@@ -383,6 +383,9 @@ int usbip_server_run(void)
 void usbip_server_stop(void)
 {
     s_running = 0;
+
+    /* Stop transport to interrupt blocking accept() */
+    transport_stop();
 }
 
 /**

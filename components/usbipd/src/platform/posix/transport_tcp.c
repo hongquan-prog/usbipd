@@ -167,6 +167,11 @@ static ssize_t tcp_recv(struct usbip_conn_ctx* ctx, void* buf, size_t len)
             {
                 continue;
             }
+            if (n < 0 && errno == EBADF)
+            {
+                /* Socket closed by another thread */
+                return -1;
+            }
             if (n == 0)
             {
                 /* Connection closed */
@@ -211,6 +216,7 @@ static ssize_t tcp_send(struct usbip_conn_ctx* ctx, const void* buf, size_t len)
 
 static void tcp_close(struct usbip_conn_ctx* ctx)
 {
+    int fd;
     struct tcp_conn_priv* priv = NULL;
 
     if (ctx)
@@ -220,7 +226,12 @@ static void tcp_close(struct usbip_conn_ctx* ctx)
         {
             if (priv->fd >= 0)
             {
-                close(priv->fd);
+                fd = priv->fd;
+                /* Mark as closed first */
+                priv->fd = -1;
+                /* Force recv() to return immediately */
+                shutdown(fd, SHUT_RDWR); 
+                close(fd);
             }
 
             osal_free(priv);
@@ -239,7 +250,20 @@ static void tcp_destroy(struct usbip_transport* trans)
         if (priv->fd >= 0)
         {
             close(priv->fd);
+            priv->fd = -1;
         }
+    }
+}
+
+static void tcp_stop(struct usbip_transport* trans)
+{
+    struct tcp_transport_priv* priv = trans->priv;
+
+    if (priv && priv->fd >= 0)
+    {
+        /* Close listen socket to interrupt blocking accept() */
+        close(priv->fd);
+        priv->fd = -1;
     }
 }
 
@@ -253,6 +277,7 @@ static struct usbip_transport trans = {.priv = &priv,
                                        .recv = tcp_recv,
                                        .send = tcp_send,
                                        .close = tcp_close,
+                                       .stop = tcp_stop,
                                        .destroy = tcp_destroy};
 
 TRANSPORT_REGISTER(tcp, trans);

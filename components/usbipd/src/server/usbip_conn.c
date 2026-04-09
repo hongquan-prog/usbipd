@@ -288,7 +288,7 @@ struct usbip_connection* usbip_connection_create(struct usbip_conn_ctx* ctx)
  *
  * Destroys a connection and releases all associated resources.
  * If the connection is still in the active list, it is removed first.
- * The transport context is closed by this function.
+ * Transport context should be closed by usbip_connection_stop() before calling this.
  */
 void usbip_connection_destroy(struct usbip_connection* conn)
 {
@@ -314,12 +314,8 @@ void usbip_connection_destroy(struct usbip_connection* conn)
     /* Destroy state lock */
     osal_mutex_destroy(&conn->state_lock);
 
-    /* Close transport context */
-    if (conn->transport_ctx != NULL)
-    {
-        transport_close(conn->transport_ctx);
-        conn->transport_ctx = NULL;
-    }
+    /* Transport context already closed in usbip_connection_stop() */
+    conn->transport_ctx = NULL;
 
     osal_free(conn);
 
@@ -437,6 +433,13 @@ void usbip_connection_stop(struct usbip_connection* conn)
     if (!was_active)
     {
         return;
+    }
+
+    /* Close transport first to unblock RX thread from recv */
+    if (conn->transport_ctx)
+    {
+        LOG_DBG("Closing transport for %s", conn->busid);
+        transport_close(conn->transport_ctx);
     }
 
     /* Close URB queue to wake up waiting threads */

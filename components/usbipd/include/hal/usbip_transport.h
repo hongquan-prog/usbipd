@@ -104,6 +104,14 @@ struct usbip_transport
     void (*close)(struct usbip_conn_ctx* ctx);
 
     /**
+     * stop - Stop transport and interrupt blocking operations
+     * @trans: Transport instance
+     *
+     * Closes listening socket to interrupt blocking accept().
+     */
+    void (*stop)(struct usbip_transport* trans);
+
+    /**
      * destroy - Destroy transport instance
      * @trans: Transport instance
      */
@@ -179,6 +187,14 @@ void transport_close(struct usbip_conn_ctx* ctx);
  * transport_destroy - Destroy default transport
  */
 void transport_destroy(void);
+
+/**
+ * transport_stop - Stop transport and interrupt blocking operations
+ *
+ * Closes the listening socket to interrupt blocking accept() calls.
+ * This should be called before transport_destroy() during shutdown.
+ */
+void transport_stop(void);
 
 #ifdef __cplusplus
 }
