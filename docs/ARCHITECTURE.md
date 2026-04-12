@@ -135,20 +135,19 @@ src/
 - `transport_close()` - 关闭连接
 - `transport_destroy()` - 销毁实例
 - `transport_get_poll_fd()` - 获取 poll fd
-- `transport_set_global()` - 设置全局实例 (内部使用)
 
 **自动注册机制**:
 ```c
 /* transport_tcp.c */
-static void __attribute__((constructor)) tcp_transport_register(void)
+extern void transport_register(const char* name, struct usbip_transport* trans);
+
+static void __attribute__((constructor)) transport_register_tcp(void)
 {
-    struct usbip_transport* trans = tcp_transport_create();
-    if (trans)
-    {
-        transport_set_global(trans);
-    }
+    transport_register("tcp", &trans);
 }
 ```
+
+注：`transport_register()` 是传输层内部函数，不暴露在公共头文件中。
 
 **当前实现**:
 - TCP 传输 (`transport_tcp.c`)
@@ -423,9 +422,9 @@ int DAP_SWDP_Transfer(uint8_t request, uint16_t data, uint32_t* response);
    - 使用 `MSG_NOSIGNAL` 避免 `SIGPIPE`
    - 循环发送直到全部数据发出
 
-4. **自动注册** (`tcp_transport_register()`)
+4. **自动注册** (`transport_register_tcp()`)
    - 使用 `__attribute__((constructor))` 在程序启动时自动调用
-   - 创建 transport 实例并注册为全局实例
+   - 调用内部 `transport_register()` 注册传输实例
 
 5. **静态库符号保留** (CMake 配置)
 
@@ -709,17 +708,23 @@ int usbip_is_device_available(const char* busid);
 **应用**: 传输层全局实例
 
 ```c
-/* 内部全局变量 */
-static struct usbip_transport* g_transport = NULL;
+/* transport_tcp.c - 静态实例 */
+static struct tcp_transport_priv priv = {.fd = -1, .port = 0};
+static struct usbip_transport trans = {
+    .priv = &priv,
+    .listen = tcp_listen,
+    .accept = tcp_accept,
+    /* ... 其他函数指针 */
+};
 
-/* 内部设置函数 */
-void transport_set_global(struct usbip_transport* trans)
+/* 自动注册 - 调用内部 transport_register() */
+__attribute__((constructor)) void transport_register_tcp(void)
 {
-    g_transport = trans;
+    transport_register("tcp", &trans);
 }
 ```
 
-通过 constructor 在程序启动时自动创建和注册。
+通过 constructor 在程序启动时自动创建和注册为全局实例。
 
 ### 2. 策略模式 (Strategy Pattern)
 
@@ -822,32 +827,21 @@ static struct usbip_conn_ctx* xxx_accept(struct usbip_transport* trans)
 
 /* 实现其他接口... */
 
-static struct usbip_transport* xxx_transport_create(void)
-{
-    struct usbip_transport* trans;
-    struct xxx_transport_priv* priv;
-
-    trans = calloc(1, sizeof(*trans));
-    priv = calloc(1, sizeof(*priv));
-
-    trans->priv = priv;
-    trans->listen = xxx_listen;
-    trans->accept = xxx_accept;
+/* 静态实例定义（嵌入式优先使用静态分配） */
+static struct xxx_transport_priv xxx_priv;
+static struct usbip_transport xxx_trans = {
+    .priv = &xxx_priv,
+    .listen = xxx_listen,
+    .accept = xxx_accept,
     /* 设置其他函数指针... */
-
-    return trans;
-}
+};
 
 /* 自动注册 */
-extern void transport_set_global(struct usbip_transport* trans);
+extern void transport_register(const char* name, struct usbip_transport* trans);
 
 static void __attribute__((constructor)) xxx_transport_register(void)
 {
-    struct usbip_transport* trans = xxx_transport_create();
-    if (trans)
-    {
-        transport_set_global(trans);
-    }
+    transport_register("xxx", &xxx_trans);
 }
 ```
 
@@ -1019,9 +1013,10 @@ endif()
 ### 配置常量
 
 ```c
-/* 服务器配置 */
-#define USBIP_URB_QUEUE_SIZE    8
-#define USBIP_URB_DATA_MAX_SIZE  256
+/* URB 队列配置 (可通过 Kconfig 调整) */
+#define USBIP_URB_QUEUE_SIZE         8   /* 每连接队列槽位数 (Kconfig: USBIP_URB_QUEUE_SIZE) */
+#define USBIP_URB_DATA_MAX_SIZE    512   /* 最大 URB 数据大小 (Kconfig: USBIP_URB_DATA_MAX_SIZE) */
+#define USBIP_MAX_CONNECTIONS        4   /* 最大并发连接数 (Kconfig: USBIP_MAX_CONNECTIONS) */
 
 /* 设备管理 */
 #define MAX_DRIVERS        16
@@ -1059,5 +1054,12 @@ endif()
 
 ---
 
-**文档版本**: 1.4
-**最后更新**: 2026-03-25
+**文档版本**: 1.5
+**最后更新**: 2026-04-12
+
+### 更新记录
+
+- v1.5 (2026-04-12)
+  - 添加 URB 队列 Kconfig 配置说明
+  - 更新传输层自动注册机制文档
+  - 移除 `transport_set_global()` 内部 API 引用

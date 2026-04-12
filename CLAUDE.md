@@ -273,18 +273,16 @@ usbip-server/
 
 ### 传输层全局单例
 - 使用 `__attribute__((constructor))` 在程序启动时自动注册
-- 通过 `transport_set_global()` 设置全局实例
+- 调用内部 `transport_register()` 注册全局实例
 - 使用 wrapper 函数访问：`transport_listen()`, `transport_send()` 等
 
 ```c
 /* transport_tcp.c - 自动注册 */
-static void __attribute__((constructor)) tcp_transport_register(void)
+extern void transport_register(const char* name, struct usbip_transport* trans);
+
+static void __attribute__((constructor)) transport_register_tcp(void)
 {
-    struct usbip_transport* trans = tcp_transport_create();
-    if (trans)
-    {
-        transport_set_global(trans);
-    }
+    transport_register("tcp", &trans);
 }
 ```
 
@@ -363,7 +361,12 @@ vim .config
 
 # 示例：修改端口和日志级别
 CONFIG_USBIP_SERVER_PORT=3241
-CONFIG_LOG_SERVER_LEVEL=4
+CONFIG_USBIP_LOG_LEVEL=4
+
+# 示例：URB 队列配置（高延迟网络或高吞吐量场景）
+CONFIG_USBIP_URB_QUEUE_SIZE=16       # 默认 8，增大可提高吞吐量
+CONFIG_USBIP_URB_DATA_MAX_SIZE=1024  # 默认 512，Bulk 设备可增大
+CONFIG_USBIP_MAX_CONNECTIONS=2       # 默认 4，限制并发连接数
 
 # 2. 重新生成配置
 python scripts/gen_config.py
