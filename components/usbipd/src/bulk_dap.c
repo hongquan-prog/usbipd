@@ -32,6 +32,12 @@
 
 LOG_MODULE_REGISTER(dap_v2, CONFIG_DAP_LOG_LEVEL);
 
+/**************************************************************************
+ * External DAP Lock Wrapper - Defined in hid_dap.c
+ **************************************************************************/
+
+extern uint32_t dap_process_command_safety(const uint8_t* request, uint8_t* response);
+
 /*****************************************************************************
  * DAP v2 Device Configuration
  *****************************************************************************/
@@ -262,7 +268,8 @@ struct virtual_dap_v2
     int exported;
     struct usbip_connection* conn;
 
-    /* DAP Response Buffer */
+    /* DAP Response Buffer - protected by response_lock */
+    struct osal_mutex response_lock;
     uint8_t response[BULK_DAP_PACKET_SIZE];
     size_t response_len;
     int response_pending;
@@ -277,8 +284,13 @@ static struct virtual_dap_v2 vdap_v2;
 static void dap_v2_process_command(const void* data, size_t len)
 {
     LOG_HEX_DBG("[CMD] %zu bytes:", (const uint8_t*)data, len, len);
-    vdap_v2.response_len = DAP_ProcessCommand((const uint8_t*)data, vdap_v2.response) & 0xFFFF;
+
+    osal_mutex_lock(&vdap_v2.response_lock);
+    /* Process command with global DAP lock */
+    vdap_v2.response_len = dap_process_command_safety((const uint8_t*)data, vdap_v2.response) & 0xFFFF;
     vdap_v2.response_pending = 1;
+    osal_mutex_unlock(&vdap_v2.response_lock);
+
     LOG_HEX_DBG("[RSP] %zu bytes:", vdap_v2.response, vdap_v2.response_len, vdap_v2.response_len);
 }
 
@@ -293,6 +305,8 @@ static int vdap_v2_handle_urb(struct usbip_device_driver* driver,
 {
     uint32_t ep;
     int ret;
+    size_t response_len = 0;
+    int has_response = 0;
 
     (void)driver;
     ret = 1;
@@ -410,19 +424,27 @@ static int vdap_v2_handle_urb(struct usbip_device_driver* driver,
             /* DAP v2 Bulk IN (EP1) */
             else if (ep == 1 && urb_cmd->base.direction == USBIP_DIR_IN)
             {
+                /* Check and consume response with lock held */
+                osal_mutex_lock(&vdap_v2.response_lock);
                 if (vdap_v2.response_pending)
                 {
-                    size_t actual_len = vdap_v2.response_len;
-                    *data_out = osal_malloc(actual_len);
+                    has_response = 1;
+                    response_len = vdap_v2.response_len;
+                    *data_out = osal_malloc(response_len);
                     if (*data_out)
                     {
-                        memcpy(*data_out, vdap_v2.response, actual_len);
-                        *data_len = actual_len;
-                        urb_ret->u.ret_submit.actual_length = actual_len;
+                        memcpy(*data_out, vdap_v2.response, response_len);
+                        *data_len = response_len;
+                        urb_ret->u.ret_submit.actual_length = response_len;
                     }
                     urb_ret->u.ret_submit.status = 0;
                     vdap_v2.response_pending = 0;
-                    LOG_DBG("IN: %zu bytes", actual_len);
+                }
+                osal_mutex_unlock(&vdap_v2.response_lock);
+
+                if (has_response)
+                {
+                    LOG_DBG("IN: %zu bytes", response_len);
                 }
                 else
                 {
@@ -545,9 +567,19 @@ static int vdap_v2_unexport_device(struct usbip_device_driver* driver, const cha
 
 static int vdap_v2_init(struct usbip_device_driver* driver)
 {
+    int ret;
+
     (void)driver;
 
     memset(&vdap_v2, 0, sizeof(vdap_v2));
+
+    /* Initialize response mutex */
+    ret = osal_mutex_init(&vdap_v2.response_lock);
+    if (ret != OSAL_OK)
+    {
+        LOG_ERR("Failed to initialize DAP v2 response mutex");
+        return -1;
+    }
 
     strncpy(vdap_v2.udev.path, "/sys/devices/platform/virtual-dap-v2", SYSFS_PATH_MAX - 1);
     strncpy(vdap_v2.udev.busid, "2-2", SYSFS_BUS_ID_SIZE - 1);
@@ -581,6 +613,9 @@ static int vdap_v2_init(struct usbip_device_driver* driver)
 static void vdap_v2_cleanup(struct usbip_device_driver* driver)
 {
     (void)driver;
+
+    /* Destroy response mutex */
+    osal_mutex_destroy(&vdap_v2.response_lock);
     memset(&vdap_v2, 0, sizeof(vdap_v2));
 }
 

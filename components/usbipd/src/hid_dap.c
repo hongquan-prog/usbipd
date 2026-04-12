@@ -32,6 +32,31 @@
 LOG_MODULE_REGISTER(dap, CONFIG_DAP_LOG_LEVEL);
 
 /**************************************************************************
+ * Global DAP Lock - Protects shared DAP_Data used by DAP_ProcessCommand
+ **************************************************************************/
+
+static struct osal_mutex s_dap_lock;
+
+/**
+ * dap_process_command_safety - Thread-safe wrapper for DAP_ProcessCommand
+ * @request: Input command data
+ * @response: Output response buffer
+ * Return: Response length (lower 16 bits) + request length (upper 16 bits)
+ *
+ * This function is called from both HID and Bulk DAP devices.
+ */
+uint32_t dap_process_command_safety(const uint8_t* request, uint8_t* response)
+{
+    uint32_t ret;
+
+    osal_mutex_lock(&s_dap_lock);
+    ret = DAP_ProcessCommand(request, response);
+    osal_mutex_unlock(&s_dap_lock);
+
+    return ret;
+}
+
+/**************************************************************************
  * DAP Device Configuration
  **************************************************************************/
 
@@ -240,7 +265,8 @@ struct virtual_dap
     int exported;
     struct usbip_connection* conn;
 
-    /* DAP Response Buffer */
+    /* DAP Response Buffer - protected by response_lock */
+    struct osal_mutex response_lock;
     uint8_t response[HID_DAP_PACKET_SIZE];
     size_t response_len;
     int response_pending;
@@ -285,8 +311,13 @@ static int dap_handle_data(uint8_t report_id, const void* data, size_t len, void
     }
 
     LOG_HEX_DBG("[CMD] %zu bytes:", (const uint8_t*)data, len, len);
-    vdap.response_len = DAP_ProcessCommand((const uint8_t*)data, vdap.response) & 0xFFFF;
+
+    osal_mutex_lock(&vdap.response_lock);
+    /* Process command with global DAP lock */
+    vdap.response_len = dap_process_command_safety((const uint8_t*)data, vdap.response) & 0xFFFF;
     vdap.response_pending = 1;
+    vdap.response_valid = 1;
+    osal_mutex_unlock(&vdap.response_lock);
     LOG_HEX_DBG("[RSP] %u bytes: ", vdap.response, vdap.response_len, vdap.response_len);
 
     return 0;
@@ -302,6 +333,7 @@ static int dap_get_report(uint8_t report_type, uint8_t report_id, void* data, si
 {
     size_t copy_len;
     const size_t report_size = HID_DAP_PACKET_SIZE;
+    int response_pending;
 
     (void)report_type;
     (void)report_id;
@@ -312,17 +344,23 @@ static int dap_get_report(uint8_t report_type, uint8_t report_id, void* data, si
         return -1;
     }
 
+    /* Read response state with lock held */
+    osal_mutex_lock(&vdap.response_lock);
+    response_pending = vdap.response_pending;
+    copy_len = vdap.response_len < report_size ? vdap.response_len : report_size;
+
     /* Return cached response data, fill remaining with 0 */
-    if (vdap.response_pending)
+    if (response_pending)
     {
-        copy_len = vdap.response_len < report_size ? vdap.response_len : report_size;
         memcpy(data, vdap.response, copy_len);
-        if (copy_len < report_size)
-        {
-            memset((uint8_t*)data + copy_len, 0, report_size - copy_len);
-        }
     }
-    else
+    osal_mutex_unlock(&vdap.response_lock);
+
+    if (response_pending && copy_len < report_size)
+    {
+        memset((uint8_t*)data + copy_len, 0, report_size - copy_len);
+    }
+    else if (!response_pending)
     {
         /* Return empty report when no response data */
         memset(data, 0, report_size);
@@ -440,21 +478,31 @@ static int vdap_handle_urb(struct usbip_device_driver* driver, const struct usbi
             }
             else if (ep == 1 && urb_cmd->base.direction == USBIP_DIR_IN)
             {
-                if (vdap.response_pending)
+                size_t response_len = 0;
+                int has_response = 0;
+
+                /* Check and consume response with lock held */
+                osal_mutex_lock(&vdap.response_lock);
+                if (vdap.response_pending && vdap.response_valid)
                 {
-                    /* Return actual response length, not padded to 64 bytes */
-                    *data_out = osal_malloc(vdap.response_len);
+                    has_response = 1;
+                    response_len = vdap.response_len;
+                    *data_out = osal_malloc(response_len);
                     if (*data_out)
                     {
-                        memcpy(*data_out, vdap.response, vdap.response_len);
-                        *data_len = vdap.response_len;
-                        urb_ret->u.ret_submit.actual_length = vdap.response_len;
+                        memcpy(*data_out, vdap.response, response_len);
+                        *data_len = response_len;
+                        urb_ret->u.ret_submit.actual_length = response_len;
                     }
-
                     urb_ret->u.ret_submit.status = 0;
                     vdap.response_pending = 0;
                     vdap.response_valid = 0;
-                    LOG_DBG("IN: %zu bytes", vdap.response_len);
+                }
+                osal_mutex_unlock(&vdap.response_lock);
+
+                if (has_response)
+                {
+                    LOG_DBG("IN: %zu bytes", response_len);
                 }
                 else
                 {
@@ -574,9 +622,19 @@ static int vdap_unexport_device(struct usbip_device_driver* driver, const char* 
 
 static int vdap_init(struct usbip_device_driver* driver)
 {
+    int ret;
+
     (void)driver;
 
     memset(&vdap, 0, sizeof(vdap));
+
+    /* Initialize device response mutex */
+    ret = osal_mutex_init(&vdap.response_lock);
+    if (ret != OSAL_OK)
+    {
+        LOG_ERR("Failed to initialize DAP response mutex");
+        return -1;
+    }
 
     strncpy(vdap.udev.path, "/sys/devices/platform/virtual-dap", SYSFS_PATH_MAX - 1);
     strncpy(vdap.udev.busid, "2-1", SYSFS_BUS_ID_SIZE - 1);
@@ -615,6 +673,10 @@ static int vdap_init(struct usbip_device_driver* driver)
 static void vdap_cleanup(struct usbip_device_driver* driver)
 {
     (void)driver;
+
+    /* Destroy response mutex */
+    osal_mutex_destroy(&vdap.response_lock);
+
     memset(&vdap, 0, sizeof(vdap));
 }
 
@@ -640,5 +702,7 @@ struct usbip_device_driver virtual_dap_driver = {
 
 void __attribute__((constructor, used)) hid_dap_driver_register(void)
 {
+    /* Initialize global DAP lock before any DAP device can use it */
+    osal_mutex_init(&s_dap_lock);
     usbip_register_driver(&virtual_dap_driver);
 }

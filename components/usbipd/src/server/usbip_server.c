@@ -22,6 +22,7 @@
 #include "hal/usbip_log.h"
 #include "hal/usbip_osal.h"
 #include "hal/usbip_transport.h"
+#include "usbip_devmgr.h"
 #include "usbip_protocol.h"
 #include "usbip_server.h"
 
@@ -326,6 +327,13 @@ static void usbip_server_handle_single_op(struct usbip_conn_ctx* ctx)
  */
 int usbip_server_init(uint16_t port)
 {
+    /* Initialize device manager (hash table) */
+    if (usbip_devmgr_init() < 0)
+    {
+        LOG_ERR("Failed to initialize device manager");
+        return -1;
+    }
+
     /* Initialize connection manager */
     if (usbip_conn_manager_init() < 0)
     {

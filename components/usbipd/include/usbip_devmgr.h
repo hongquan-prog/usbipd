@@ -122,6 +122,16 @@ struct usbip_device_driver
 };
 
 /*****************************************************************************
+ * Device Manager Initialization
+ *****************************************************************************/
+
+/**
+ * usbip_devmgr_init - Initialize device manager
+ * Return: 0 on success, -1 on failure
+ */
+int usbip_devmgr_init(void);
+
+/*****************************************************************************
  * Driver Registration Interface
  *****************************************************************************/
 

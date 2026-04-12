@@ -435,15 +435,18 @@ void usbip_connection_stop(struct usbip_connection* conn)
         return;
     }
 
-    /* Close transport first to unblock RX thread from recv */
+    /* Close URB queue first to signal threads to exit gracefully */
+    usbip_urb_queue_close(&conn->urb_queue);
+
+    /* Give threads time to respond to queue close */
+    osal_sleep_ms(10);
+
+    /* Close transport to force unblock RX thread from recv */
     if (conn->transport_ctx)
     {
         LOG_DBG("Closing transport for %s", conn->busid);
         transport_close(conn->transport_ctx);
     }
-
-    /* Close URB queue to wake up waiting threads */
-    usbip_urb_queue_close(&conn->urb_queue);
 
     /* Wait for processor thread to complete */
     if (conn->processor_started)
