@@ -14,6 +14,10 @@
  * OS Abstraction Layer implementation for Linux/Unix systems
  */
 
+#ifndef __unix__
+#error "POSIX OSAL implementation can only be compiled on Unix-like systems"
+#endif
+
 #include <errno.h>
 #include <pthread.h>
 #include <stdio.h>
