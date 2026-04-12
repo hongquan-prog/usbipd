@@ -62,7 +62,9 @@ usbip-server/
 │   │   │   │   └── usbip_transport.h  # 传输层接口
 │   │   │   ├── usbip_common.h     # 公共定义与协议常量
 │   │   │   ├── usbip_devmgr.h     # 设备驱动层接口
-│   │   │   └── usbip_server.h     # 服务器主接口
+│   │   │   ├── usbip_server.h     # 服务器主接口
+│   │   │   ├── usbip_control.h    # 控制传输框架
+│   │   │   └── usbip_hid.h        # HID 设备接口
 │   │   ├── priv/                  # 私有头文件（内部使用）
 │   │   │   ├── usbip_conn.h       # 连接管理（内部）
 │   │   │   ├── usbip_pack.h       # 字节序转换函数

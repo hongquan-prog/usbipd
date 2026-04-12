@@ -62,7 +62,9 @@ usbip-server/
 │   │   │   │   └── usbip_transport.h  # Transport interface
 │   │   │   ├── usbip_common.h     # Common definitions & protocol constants
 │   │   │   ├── usbip_devmgr.h     # Device driver interface
-│   │   │   └── usbip_server.h     # Server main interface
+│   │   │   ├── usbip_server.h     # Server main interface
+│   │   │   ├── usbip_control.h    # Control transfer framework
+│   │   │   └── usbip_hid.h        # HID device interface
 │   │   ├── priv/                  # Private headers (internal use)
 │   │   │   ├── usbip_conn.h       # Connection management (internal)
 │   │   │   ├── usbip_pack.h       # Byte order conversion functions
