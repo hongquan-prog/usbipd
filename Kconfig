@@ -25,6 +25,63 @@ config USBIP_SERVER_PORT
 endmenu
 
 #============================================================================
+# URB Queue Configuration
+#============================================================================
+
+menu "URB Queue Configuration"
+
+config USBIP_URB_QUEUE_SIZE
+    int "URB queue slots per connection"
+    default 8
+    range 4 64
+    help
+        Number of URB slots in the per-connection queue.
+
+        Each connection has its own URB queue for buffering requests
+        between the RX thread and the processor thread.
+
+        Larger values improve throughput but consume more memory.
+        For high-latency networks, increase this value.
+
+        Memory impact: sizeof(urb_slot) * USBIP_URB_QUEUE_SIZE per connection
+
+config USBIP_URB_DATA_MAX_SIZE
+    int "Maximum URB data size (bytes)"
+    default 512
+    range 64 4096
+    help
+        Maximum data size per URB transfer.
+
+        This value must be large enough to accommodate the largest
+        endpoint buffer size of any attached USB device.
+
+        Typical values:
+        - HID devices (CMSIS-DAP v1): 64 bytes
+        - Bulk devices (CMSIS-DAP v2): 512 bytes
+        - High-speed bulk endpoints: 512-1024 bytes
+
+        Note: Each URB slot allocates a buffer of this size,
+        so larger values significantly increase memory usage.
+
+        Memory impact: USBIP_URB_DATA_MAX_SIZE * USBIP_URB_QUEUE_SIZE per connection
+
+config USBIP_MAX_CONNECTIONS
+    int "Maximum simultaneous device connections"
+    default 4
+    range 1 16
+    help
+        Maximum number of USB devices that can be exported simultaneously.
+
+        Each connection spawns two threads (RX and Processor) and
+        allocates a URB queue. Increasing this value allows more
+        clients to connect but consumes more system resources.
+
+        For single-device setups (e.g., one DAP), 1-2 is sufficient.
+        For multi-probe setups, increase as needed.
+
+endmenu
+
+#============================================================================
 # Log Configuration
 #============================================================================
 

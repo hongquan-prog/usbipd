@@ -24,9 +24,23 @@ extern "C" {
  * Configuration
  *****************************************************************************/
 
-#define USBIP_URB_QUEUE_SIZE 8      /* URB queue slots */
-#define USBIP_URB_DATA_MAX_SIZE 512 /* Max data size per URB */
-#define USBIP_MAX_CONNECTIONS 4     /* Max simultaneous device connections */
+/* URB queue slots - from Kconfig USBIP_URB_QUEUE_SIZE, default 8 */
+#ifndef CONFIG_USBIP_URB_QUEUE_SIZE
+#define CONFIG_USBIP_URB_QUEUE_SIZE 8
+#endif
+#define USBIP_URB_QUEUE_SIZE CONFIG_USBIP_URB_QUEUE_SIZE
+
+/* Max URB data size - from Kconfig USBIP_URB_DATA_MAX_SIZE, default 512 */
+#ifndef CONFIG_USBIP_URB_DATA_MAX_SIZE
+#define CONFIG_USBIP_URB_DATA_MAX_SIZE 512
+#endif
+#define USBIP_URB_DATA_MAX_SIZE CONFIG_USBIP_URB_DATA_MAX_SIZE
+
+/* Max connections - from Kconfig USBIP_MAX_CONNECTIONS, default 4 */
+#ifndef CONFIG_USBIP_MAX_CONNECTIONS
+#define CONFIG_USBIP_MAX_CONNECTIONS 4
+#endif
+#define USBIP_MAX_CONNECTIONS CONFIG_USBIP_MAX_CONNECTIONS
 
 /*****************************************************************************
  * Forward Declarations
