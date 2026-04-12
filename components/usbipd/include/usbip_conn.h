@@ -201,6 +201,12 @@ int usbip_conn_manager_add(struct usbip_connection* conn);
  */
 void usbip_conn_manager_remove(struct usbip_connection* conn);
 
+/**
+ * usbip_conn_manager_get_count - Get current active connection count
+ * Return: Number of active connections
+ */
+int usbip_conn_manager_get_count(void);
+
 /*****************************************************************************
  * Connection Lifecycle Interface
  *****************************************************************************/

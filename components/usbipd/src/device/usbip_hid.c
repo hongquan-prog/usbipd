@@ -19,7 +19,6 @@
 #include "hal/usbip_log.h"
 #include "hal/usbip_osal.h"
 #include "usbip_common.h"
-#include "usbip_hid.h"
 
 LOG_MODULE_REGISTER(hid, CONFIG_USBIP_LOG_LEVEL);
 

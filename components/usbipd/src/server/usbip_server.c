@@ -156,6 +156,15 @@ static int usbip_server_handle_import_req(struct usbip_conn_ctx* ctx)
         return -1;
     }
 
+    /* Check connection limit before processing import */
+    if (usbip_conn_manager_get_count() >= USBIP_MAX_CONNECTIONS)
+    {
+        LOG_WRN("Maximum connections (%d) reached, rejecting import request for %s",
+                USBIP_MAX_CONNECTIONS, busid);
+        usbip_send_op_common(ctx, OP_REP_IMPORT, ST_DEV_BUSY);
+        return -1;
+    }
+
     /* Find device */
     for (driver = usbip_get_first_driver(); driver != NULL && !found;
          driver = usbip_get_next_driver(driver))

@@ -226,6 +226,25 @@ void usbip_conn_manager_remove(struct usbip_connection* conn)
     osal_mutex_unlock(&s_conn_manager.lock);
 }
 
+/**
+ * usbip_conn_manager_get_count - Get current active connection count
+ *
+ * Returns the number of active connections. This is useful for checking
+ * connection limits before accepting new import requests.
+ *
+ * Return: Number of active connections
+ */
+int usbip_conn_manager_get_count(void)
+{
+    int count;
+
+    osal_mutex_lock(&s_conn_manager.lock);
+    count = s_conn_manager.active_count;
+    osal_mutex_unlock(&s_conn_manager.lock);
+
+    return count;
+}
+
 /*****************************************************************************
  * Connection Lifecycle Operations
  *****************************************************************************/
