@@ -11,9 +11,11 @@
 #ifndef USBIP_CONN_H
 #define USBIP_CONN_H
 
-#include "hal/usbip_transport.h"
+#include <stddef.h>
+#include <stdint.h>
+
 #include "hal/usbip_osal.h"
-#include "usbip_devmgr.h"
+#include "hal/usbip_transport.h"
 #include "usbip_protocol.h"
 
 #ifdef __cplusplus
