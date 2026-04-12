@@ -207,12 +207,15 @@ usbip-server/
 │   │   │   │   ├── usbip_log.h  # 日志系统（支持颜色）
 │   │   │   │   ├── usbip_osal.h # OSAL 接口
 │   │   │   │   └── usbip_transport.h  # 传输层接口
-│   │   │   ├── usbip_protocol.h # USBIP 协议定义
+│   │   │   ├── usbip_common.h   # 公共定义与 USBIP 协议常量
 │   │   │   ├── usbip_devmgr.h   # 设备驱动接口
 │   │   │   ├── usbip_server.h   # 服务器接口
 │   │   │   ├── usbip_control.h  # 控制传输框架
-│   │   │   ├── usbip_hid.h      # HID 设备接口
-│   │   │   └── usbip_common.h   # 公共定义
+│   │   │   └── usbip_hid.h      # HID 设备接口
+│   │   ├── priv/                # 私有头文件（内部实现）
+│   │   │   ├── usbip_conn.h     # 连接管理（内部）
+│   │   │   ├── usbip_pack.h     # 字节序转换函数
+│   │   │   └── usbip_urb.h      # URB 队列接口（内部）
 │   │   └── src/
 │   │       ├── hal/             # HAL 层实现
 │   │       │   ├── usbip_mempool.c  # 内存池管理
@@ -245,7 +248,10 @@ usbip-server/
 ### 核心架构
 - `components/usbipd/include/hal/usbip_transport.h` - 传输层接口
 - `components/usbipd/include/hal/usbip_log.h` - 日志系统接口
-- `components/usbipd/include/usbip_protocol.h` - USBIP 协议定义
+- `components/usbipd/include/usbip_common.h` - 公共定义与 USBIP 协议常量
+- `components/usbipd/priv/usbip_conn.h` - 连接管理接口（内部）
+- `components/usbipd/priv/usbip_pack.h` - 字节序转换函数（内部）
+- `components/usbipd/priv/usbip_urb.h` - URB 队列接口（内部）
 - `components/usbipd/include/usbip_devmgr.h` - 设备驱动接口
 - `components/usbipd/include/usbip_server.h` - 服务器接口（含发送/接收函数声明）
 - `components/usbipd/src/server/usbip_server.c` - 服务器主循环，协议发送/接收函数

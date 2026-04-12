@@ -53,40 +53,47 @@ A USBIP server implementation with three-layer architecture, running on Raspberr
 
 ```
 usbip-server/
-├── include/
-│   ├── hal/                      # HAL layer headers
-│   │   ├── usbip_log.h           # Log system
-│   │   ├── usbip_osal.h          # OSAL interface
-│   │   └── usbip_transport.h     # Transport interface
-│   ├── usbip_protocol.h          # Protocol definitions
-│   ├── usbip_devmgr.h            # Device driver interface
-│   └── usbip_server.h            # Server main interface
-├── src/
-│   ├── hal/                       # HAL implementation
-│   │   ├── usbip_log.c           # Log system
-│   │   ├── usbip_osal.c          # OSAL core
-│   │   ├── usbip_transport.c     # Transport core
-│   │   └── usbip_mempool.c       # Memory pool
-│   ├── server/                    # Server core
-│   │   ├── usbip_pack.c          # Byte order conversion/packing
-│   │   ├── usbip_server.c        # Connection management
-│   │   ├── usbip_urb.c           # URB processing
-│   │   ├── usbip_devmgr.c        # Device management
-│   │   └── usbip_control.c       # Control transfer framework
-│   ├── device/                    # Device driver base classes
-│   │   ├── usbip_hid.c           # HID base class
-│   │   └── usbip_bulk.c          # Bulk base class
-│   ├── hid_dap.c                 # HID DAP v1 driver
-│   ├── bulk_dap.c                # Bulk DAP v2 driver
-│   ├── transport_tcp.c            # TCP transport implementation
-│   ├── osal_posix.c               # POSIX OSAL implementation
-│   └── main.c                     # Main program
 ├── components/
+│   ├── usbipd/                    # USBIP server core component
+│   │   ├── include/               # Public headers
+│   │   │   ├── hal/               # HAL layer headers
+│   │   │   │   ├── usbip_log.h    # Log system
+│   │   │   │   ├── usbip_osal.h   # OSAL interface
+│   │   │   │   └── usbip_transport.h  # Transport interface
+│   │   │   ├── usbip_common.h     # Common definitions & protocol constants
+│   │   │   ├── usbip_devmgr.h     # Device driver interface
+│   │   │   └── usbip_server.h     # Server main interface
+│   │   ├── priv/                  # Private headers (internal use)
+│   │   │   ├── usbip_conn.h       # Connection management (internal)
+│   │   │   ├── usbip_pack.h       # Byte order conversion functions
+│   │   │   └── usbip_urb.h        # URB queue interface (internal)
+│   │   └── src/                   # Implementation
+│   │       ├── hal/               # HAL layer implementation
+│   │       │   ├── usbip_log.c    # Log system
+│   │       │   ├── usbip_osal.c   # OSAL core
+│   │       │   ├── usbip_transport.c  # Transport core
+│   │       │   └── usbip_mempool.c    # Memory pool
+│   │       ├── server/            # Server core
+│   │       │   ├── usbip_pack.c   # Byte order conversion/packing
+│   │       │   ├── usbip_server.c # Connection management
+│   │       │   ├── usbip_urb.c    # URB processing
+│   │       │   ├── usbip_devmgr.c # Device management
+│   │       │   └── usbip_control.c    # Control transfer framework
+│   │       ├── device/            # Device driver base classes
+│   │       │   ├── usbip_hid.c    # HID base class
+│   │       │   └── usbip_bulk.c   # Bulk base class
+│   │       ├── platform/posix/    # POSIX platform implementation
+│   │       │   ├── osal_posix.c   # POSIX OSAL implementation
+│   │       │   └── transport_tcp.c    # TCP transport implementation
+│   │       ├── hid_dap.c          # HID DAP v1 driver
+│   │       └── bulk_dap.c         # Bulk DAP v2 driver
 │   └── debug_probe/               # CMSIS-DAP implementation
 │       ├── debug_gpio.c           # GPIO bit-banging
 │       ├── debug_gpio.h           # GPIO definitions
 │       ├── swd.c                  # SWD protocol
 │       └── DAP/                   # CMSIS-DAP core
+├── src/
+│   └── main.c                     # Main program entry
 ├── Kconfig                        # Kconfig configuration
 ├── scripts/
 │   └── gen_config.py              # Config generation script

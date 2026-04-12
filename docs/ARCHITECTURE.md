@@ -112,10 +112,10 @@
 
 **文件结构**:
 ```
-src/
-├── hal/usbip_transport.h      # 传输层接口定义
-├── hal/usbip_transport.c      # 传输层核心：全局实例 + wrapper 函数
-└── transport_tcp.c            # TCP 传输实现
+components/usbipd/
+├── include/hal/usbip_transport.h    # 传输层接口定义
+├── src/hal/usbip_transport.c        # 传输层核心：全局实例 + wrapper 函数
+└── src/platform/posix/transport_tcp.c   # TCP 传输实现
 ```
 
 **核心接口**: `struct usbip_transport`
@@ -258,7 +258,7 @@ struct usbip_device_driver {
 
 **职责**: 提供统一的日志输出接口，支持彩色输出。
 
-**文件**: `include/hal/usbip_log.h`
+**文件**: `components/usbipd/include/hal/usbip_log.h`
 
 **日志等级**:
 ```c
@@ -301,13 +301,11 @@ LOG_DBG("Debug: %s", msg);
 
 **文件结构**:
 ```
-src/hal/
-├── usbip_osal.h     # OSAL 接口定义
-├── usbip_osal.c     # OSAL 核心：wrapper 函数
-└── usbip_mempool.c  # 内存池实现
-
-src/
-└── osal_posix.c     # POSIX 平台实现
+components/usbipd/
+├── include/hal/usbip_osal.h         # OSAL 接口定义
+├── src/hal/usbip_osal.c             # OSAL 核心：wrapper 函数
+├── src/hal/usbip_mempool.c          # 内存池实现
+└── src/platform/posix/osal_posix.c  # POSIX 平台实现
 ```
 
 **接口结构**:
@@ -405,7 +403,7 @@ int DAP_SWDP_Transfer(uint8_t request, uint16_t data, uint32_t* response);
 
 ### 1. 传输层 - TCP 实现
 
-**文件**: `src/transport_tcp.c`
+**文件**: `components/usbipd/src/platform/posix/transport_tcp.c`
 
 **设计要点**:
 
@@ -455,7 +453,7 @@ setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &opt, sizeof(opt));
 
 ### 2. 协议层 - 服务器核心
 
-**文件**: `src/server/usbip_server.c`, `src/server/usbip_conn.c`
+**文件**: `components/usbipd/src/server/usbip_server.c`, `components/usbipd/priv/usbip_conn.c`
 
 **多客户端服务器启动流程**:
 
@@ -499,7 +497,7 @@ main()
 
 ### 3. URB 处理模块 (多客户端)
 
-**文件**: `src/server/usbip_urb.c`, `src/server/usbip_conn.c`
+**文件**: `components/usbipd/src/server/usbip_urb.c`, `components/usbipd/priv/usbip_conn.h`
 
 **每连接双线程架构**:
 
@@ -563,7 +561,7 @@ usbip_connection_stop(conn)
 
 ### 4. 设备管理器 (多客户端)
 
-**文件**: `src/server/usbip_devmgr.c`
+**文件**: `components/usbipd/src/server/usbip_devmgr.c`
 
 **驱动注册表**:
 - 最多支持 16 个驱动
@@ -1054,10 +1052,15 @@ endif()
 
 ---
 
-**文档版本**: 1.5
+**文档版本**: 1.6
 **最后更新**: 2026-04-12
 
 ### 更新记录
+
+- v1.6 (2026-04-12)
+  - 更新目录结构，添加 `components/usbipd/` 组件化布局
+  - 添加 `priv/` 私有头文件目录说明
+  - 移除 `usbip_protocol.h`，内容合并到 `usbip_common.h`
 
 - v1.5 (2026-04-12)
   - 添加 URB 队列 Kconfig 配置说明
