@@ -119,28 +119,6 @@ struct usbip_transport
 };
 
 /*****************************************************************************
- * Global Transport Management (Internal)
- *****************************************************************************/
-
-/**
- * transport_register - Register transport instance (internal)
- * @name: Transport name
- * @trans: Transport instance
- */
-void transport_register(const char* name, struct usbip_transport* trans);
-
-/**
- * TRANSPORT_REGISTER - Auto-registration macro
- * @platform: Platform name
- * @ops: transport_ops_t variable name
- */
-#define TRANSPORT_REGISTER(platform, ops)                                                          \
-    __attribute__((constructor, used)) void transport_register_##platform(void)                   \
-    {                                                                                              \
-        transport_register(#platform, &ops);                                                       \
-    }
-
-/*****************************************************************************
  * Default Transport Management (Wrapper Functions)
  *
  * These functions operate on a global default transport instance

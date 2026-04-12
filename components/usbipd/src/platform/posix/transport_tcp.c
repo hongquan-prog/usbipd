@@ -28,6 +28,8 @@
 #include "hal/usbip_osal.h"
 #include "hal/usbip_transport.h"
 
+void transport_register(const char* name, struct usbip_transport* trans);
+
 /*****************************************************************************
  * TCP Transport Private Data
  *****************************************************************************/
@@ -280,4 +282,7 @@ static struct usbip_transport trans = {.priv = &priv,
                                        .stop = tcp_stop,
                                        .destroy = tcp_destroy};
 
-TRANSPORT_REGISTER(tcp, trans);
+__attribute__((constructor, used)) void transport_register_tcp(void)
+{
+    transport_register("tcp", &trans);
+}
