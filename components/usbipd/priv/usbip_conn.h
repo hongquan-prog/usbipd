@@ -13,10 +13,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
-
-#include "hal/usbip_osal.h"
-#include "hal/usbip_transport.h"
-#include "usbip_protocol.h"
+#include "usbip_common.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,27 +25,21 @@ extern "C" {
 
 /* URB queue slots - from Kconfig USBIP_URB_QUEUE_SIZE, default 8 */
 #ifndef CONFIG_USBIP_URB_QUEUE_SIZE
-#define CONFIG_USBIP_URB_QUEUE_SIZE 8
+#    define CONFIG_USBIP_URB_QUEUE_SIZE 8
 #endif
 #define USBIP_URB_QUEUE_SIZE CONFIG_USBIP_URB_QUEUE_SIZE
 
 /* Max URB data size - from Kconfig USBIP_URB_DATA_MAX_SIZE, default 512 */
 #ifndef CONFIG_USBIP_URB_DATA_MAX_SIZE
-#define CONFIG_USBIP_URB_DATA_MAX_SIZE 512
+#    define CONFIG_USBIP_URB_DATA_MAX_SIZE 512
 #endif
 #define USBIP_URB_DATA_MAX_SIZE CONFIG_USBIP_URB_DATA_MAX_SIZE
 
 /* Max connections - from Kconfig USBIP_MAX_CONNECTIONS, default 4 */
 #ifndef CONFIG_USBIP_MAX_CONNECTIONS
-#define CONFIG_USBIP_MAX_CONNECTIONS 4
+#    define CONFIG_USBIP_MAX_CONNECTIONS 4
 #endif
 #define USBIP_MAX_CONNECTIONS CONFIG_USBIP_MAX_CONNECTIONS
-
-/*****************************************************************************
- * Forward Declarations
- *****************************************************************************/
-struct usbip_connection;
-struct usbip_device_driver;
 
 /*****************************************************************************
  * Connection State Enumeration
@@ -58,10 +49,10 @@ struct usbip_device_driver;
  * enum usbip_conn_state - Connection state
  */
 enum usbip_conn_state {
-    CONN_STATE_INIT = 0,        /* Initializing */
-    CONN_STATE_ACTIVE,          /* Active URB processing */
-    CONN_STATE_CLOSING,         /* Graceful shutdown */
-    CONN_STATE_CLOSED           /* Cleaned up */
+    CONN_STATE_INIT = 0, /* Initializing */
+    CONN_STATE_ACTIVE,   /* Active URB processing */
+    CONN_STATE_CLOSING,  /* Graceful shutdown */
+    CONN_STATE_CLOSED    /* Cleaned up */
 };
 
 /*****************************************************************************
@@ -74,8 +65,9 @@ struct urb_slot;
 /**
  * struct usbip_conn_urb_queue - Per-connection URB queue
  */
-struct usbip_conn_urb_queue {
-    void* priv;  /* Opaque pointer to implementation-specific data */
+struct usbip_conn_urb_queue
+{
+    void* priv; /* Opaque pointer to implementation-specific data */
 };
 
 /*****************************************************************************
@@ -88,7 +80,8 @@ struct usbip_conn_urb_queue {
  * Each exported device gets its own connection instance with dedicated
  * URB queue and processing threads.
  */
-struct usbip_connection {
+struct usbip_connection
+{
     /* List management - must be first for list macros */
     struct usbip_connection* next;
     struct usbip_connection* prev;
@@ -114,64 +107,6 @@ struct usbip_connection {
     int rx_thread_started;
     int processor_started;
 };
-
-/*****************************************************************************
- * Per-Connection URB Queue Interface
- *****************************************************************************/
-
-/**
- * usbip_urb_queue_init - Initialize URB queue
- * @q: Queue to initialize
- * Return: 0 on success, -1 on failure
- */
-int usbip_urb_queue_init(struct usbip_conn_urb_queue* q);
-
-/**
- * usbip_urb_queue_destroy - Destroy URB queue
- * @q: Queue to destroy
- */
-void usbip_urb_queue_destroy(struct usbip_conn_urb_queue* q);
-
-/**
- * usbip_urb_queue_push - Push URB to queue
- * @q: Queue
- * @header: URB header
- * @data: URB data (can be NULL for IN transfers)
- * @data_len: Data length
- * Return: 0 on success, -1 on failure or queue closed
- */
-int usbip_urb_queue_push(struct usbip_conn_urb_queue* q,
-                         const struct usbip_header* header,
-                         const void* data, size_t data_len);
-
-/**
- * usbip_urb_queue_pop - Pop URB from queue
- * @q: Queue
- * @header: Output URB header
- * @data: Output data buffer
- * @data_len: Input/output data buffer size/actual length
- * Return: 0 on success, -1 on failure or queue closed
- */
-int usbip_urb_queue_pop(struct usbip_conn_urb_queue* q,
-                        struct usbip_header* header,
-                        void* data, size_t* data_len);
-
-/**
- * usbip_urb_queue_close - Close queue to signal threads to exit
- * @q: Queue
- */
-void usbip_urb_queue_close(struct usbip_conn_urb_queue* q);
-
-/**
- * usbip_urb_send_reply - Send URB response to client
- * @ctx: Connection context
- * @urb_ret: URB return header
- * @data: Response data
- * @data_len: Data length
- * Return: 0 on success, -1 on failure
- */
-int usbip_urb_send_reply(struct usbip_conn_ctx* ctx, struct usbip_header* urb_ret,
-                         const void* data, size_t data_len);
 
 /*****************************************************************************
  * Connection Manager Interface
@@ -231,8 +166,7 @@ void usbip_connection_destroy(struct usbip_connection* conn);
  * @busid: Device bus ID
  * Return: 0 on success, -1 on failure
  */
-int usbip_connection_start(struct usbip_connection* conn,
-                           struct usbip_device_driver* driver,
+int usbip_connection_start(struct usbip_connection* conn, struct usbip_device_driver* driver,
                            const char* busid);
 
 /**

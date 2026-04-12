@@ -222,7 +222,7 @@ usbip-server/
 │   │       │   ├── osal_posix.c # POSIX OSAL 实现
 │   │       │   └── transport_tcp.c    # TCP 传输实现
 │   │       ├── server/          # 服务器核心
-│   │       │   ├── usbip_protocol.c   # 协议编解码
+│   │       │   ├── usbip_pack.c       # 字节序转换/打包函数
 │   │       │   ├── usbip_server.c     # 服务器主循环（接受连接）
 │   │       │   ├── usbip_conn.c       # 连接生命周期管理（多客户端）
 │   │       │   ├── usbip_urb.c        # URB 队列处理
@@ -247,8 +247,9 @@ usbip-server/
 - `components/usbipd/include/hal/usbip_log.h` - 日志系统接口
 - `components/usbipd/include/usbip_protocol.h` - USBIP 协议定义
 - `components/usbipd/include/usbip_devmgr.h` - 设备驱动接口
-- `components/usbipd/include/usbip_server.h` - 服务器接口（连接状态、URB队列定义）
-- `components/usbipd/src/server/usbip_server.c` - 服务器主循环（连接接受器）
+- `components/usbipd/include/usbip_server.h` - 服务器接口（含发送/接收函数声明）
+- `components/usbipd/src/server/usbip_server.c` - 服务器主循环，协议发送/接收函数
+- `components/usbipd/src/server/usbip_pack.c` - 字节序转换/打包函数
 - `components/usbipd/src/server/usbip_conn.c` - 连接生命周期管理（多客户端核心）
 - `components/usbipd/src/server/usbip_urb.c` - URB 处理框架（每连接队列）
 - `components/usbipd/src/server/usbip_devmgr.c` - 设备管理器（设备绑定到连接）

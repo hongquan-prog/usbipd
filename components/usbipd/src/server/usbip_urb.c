@@ -22,8 +22,8 @@
 #include "hal/usbip_log.h"
 #include "hal/usbip_osal.h"
 #include "hal/usbip_transport.h"
-#include "usbip_protocol.h"
 #include "usbip_conn.h"
+#include "usbip_pack.h"
 
 LOG_MODULE_REGISTER(urb, CONFIG_USBIP_LOG_LEVEL);
 
@@ -149,8 +149,7 @@ void usbip_urb_queue_destroy(struct usbip_conn_urb_queue* q)
  *
  * Return: 0 on success, -1 on failure or queue closed
  */
-int usbip_urb_queue_push(struct usbip_conn_urb_queue* q,
-                         const struct usbip_header* header,
+int usbip_urb_queue_push(struct usbip_conn_urb_queue* q, const struct usbip_header* header,
                          const void* data, size_t data_len)
 {
     struct urb_queue* queue;
@@ -211,9 +210,8 @@ int usbip_urb_queue_push(struct usbip_conn_urb_queue* q,
  *
  * Return: 0 on success, -1 on failure or queue closed
  */
-int usbip_urb_queue_pop(struct usbip_conn_urb_queue* q,
-                        struct usbip_header* header,
-                        void* data, size_t* data_len)
+int usbip_urb_queue_pop(struct usbip_conn_urb_queue* q, struct usbip_header* header, void* data,
+                        size_t* data_len)
 {
     struct urb_queue* queue;
     struct urb_slot* slot;
@@ -293,8 +291,8 @@ void usbip_urb_queue_close(struct usbip_conn_urb_queue* q)
  *
  * Return: 0 on success, -1 on failure
  */
-int usbip_urb_send_reply(struct usbip_conn_ctx* ctx, struct usbip_header* urb_ret,
-                         const void* data, size_t data_len)
+int usbip_urb_send_reply(struct usbip_conn_ctx* ctx, struct usbip_header* urb_ret, const void* data,
+                         size_t data_len)
 {
     ssize_t n;
 

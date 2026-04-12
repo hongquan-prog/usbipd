@@ -68,7 +68,7 @@ usbip-server/
 │   │   ├── usbip_transport.c     # 传输层核心
 │   │   └── usbip_mempool.c       # 内存池
 │   ├── server/                    # 服务器核心
-│   │   ├── usbip_protocol.c      # 协议编解码
+│   │   ├── usbip_pack.c          # 字节序转换/打包函数
 │   │   ├── usbip_server.c        # 连接管理
 │   │   ├── usbip_urb.c           # URB 处理
 │   │   ├── usbip_devmgr.c        # 设备管理

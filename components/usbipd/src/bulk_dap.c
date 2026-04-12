@@ -25,10 +25,8 @@
 #include "hal/usbip_log.h"
 #include "hal/usbip_osal.h"
 #include "usbip_common.h"
-#include "usbip_conn.h"
 #include "usbip_control.h"
 #include "usbip_devmgr.h"
-#include "usbip_protocol.h"
 
 LOG_MODULE_REGISTER(dap_v2, CONFIG_DAP_LOG_LEVEL);
 
@@ -46,9 +44,9 @@ extern uint32_t dap_process_command_safety(const uint8_t* request, uint8_t* resp
 #define BULK_DAP_PID 0x4873
 #define BULK_DAP_PACKET_SIZE 512 /* High Speed Bulk packet size */
 
-/* Compile-time check: BULK_DAP_PACKET_SIZE must not exceed USBIP_URB_DATA_MAX_SIZE */
-#if BULK_DAP_PACKET_SIZE > USBIP_URB_DATA_MAX_SIZE
-#error "BULK_DAP_PACKET_SIZE exceeds USBIP_URB_DATA_MAX_SIZE. Please increase USBIP_URB_DATA_MAX_SIZE in include/usbip_conn.h"
+/* Compile-time check: BULK_DAP_PACKET_SIZE must not exceed CONFIG_USBIP_URB_DATA_MAX_SIZE */
+#if BULK_DAP_PACKET_SIZE > CONFIG_USBIP_URB_DATA_MAX_SIZE
+#error "BULK_DAP_PACKET_SIZE exceeds CONFIG_USBIP_URB_DATA_MAX_SIZE."
 #endif
 
 /*****************************************************************************

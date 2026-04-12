@@ -61,7 +61,7 @@
 │                         │                              │
 │  ┌──────────────────────┴───────────────────────────┐   │
 │  │       USBIP 协议层 (Protocol Layer)            │   │
-│  │  - usbip_protocol.c (协议编解码)             │   │
+│  │  - usbip_pack.c (字节序转换/打包)             │   │
 │  │  - usbip_server.c (连接管理/多客户端)        │   │
 │  │  - usbip_conn.c (连接生命周期管理)           │   │
 │  │  - usbip_urb.c (URB 队列处理)               │   │

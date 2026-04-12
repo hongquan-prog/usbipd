@@ -9,21 +9,13 @@
  */
 
 /*****************************************************************************
- * USBIP Protocol Layer Implementation
+ * USBIP Pack/Unpack Functions
  *
- * Implement protocol encoding/decoding and send/receive functions
+ * Byte order conversion for USBIP protocol structures
  *****************************************************************************/
 
-#include "usbip_protocol.h"
+#include "usbip_pack.h"
 #include <endian.h>
-#include <errno.h>
-#include <stdio.h>
-#include <string.h>
-#include "hal/usbip_transport.h"
-
-/*****************************************************************************
- * Byte Order Conversion Functions
- *****************************************************************************/
 
 void usbip_pack_op_common(struct op_common* op, int to_network)
 {
@@ -142,65 +134,4 @@ void usbip_pack_header(struct usbip_header* hdr, int to_network)
                 break;
         }
     }
-}
-
-/*****************************************************************************
- * Protocol Send/Receive Interface
- *****************************************************************************/
-
-int usbip_recv_op_common(struct usbip_conn_ctx* ctx, struct op_common* op)
-{
-    ssize_t n;
-
-    n = transport_recv(ctx, op, sizeof(*op));
-    if (n != sizeof(*op))
-    {
-        return -1;
-    }
-
-    usbip_pack_op_common(op, 0); /* Network order to host order */
-    return 0;
-}
-
-int usbip_send_op_common(struct usbip_conn_ctx* ctx, uint16_t code, uint32_t status)
-{
-    struct op_common op = {.version = USBIP_VERSION, .code = code, .status = status};
-    ssize_t n;
-
-    usbip_pack_op_common(&op, 1); /* Host order to network order */
-
-    n = transport_send(ctx, &op, sizeof(op));
-    if (n != sizeof(op))
-    {
-        return -1;
-    }
-    return 0;
-}
-
-int usbip_recv_header(struct usbip_conn_ctx* ctx, struct usbip_header* hdr)
-{
-    ssize_t n;
-
-    n = transport_recv(ctx, hdr, sizeof(*hdr));
-    if (n != sizeof(*hdr))
-    {
-        return -1;
-    }
-
-    usbip_pack_header(hdr, 0);
-    return 0;
-}
-
-int usbip_send_header(struct usbip_conn_ctx* ctx, struct usbip_header* hdr)
-{
-    ssize_t n;
-
-    /* Convert to network byte order first */
-    usbip_pack_header(hdr, 1);
-    n = transport_send(ctx, hdr, sizeof(*hdr));
-    if (n != sizeof(*hdr))
-    {
-        return -1;
-    }
-    return 0;
 }

@@ -359,7 +359,7 @@ int usbip_bind_device(const char* busid, struct usbip_connection* conn)
             LOG_WRN("Device %s already exported", busid);
             return -1;
         }
-        /* Reuse existing entry */
+
         entry->state = DEV_STATE_EXPORTED;
         entry->owner = conn;
         LOG_DBG("Device %s bound to connection %p", busid, (void*)conn);

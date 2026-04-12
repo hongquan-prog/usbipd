@@ -22,7 +22,6 @@
 #include "hal/usbip_log.h"
 #include "hal/usbip_osal.h"
 #include "usbip_common.h"
-#include "usbip_conn.h"
 #include "usbip_devmgr.h"
 
 LOG_MODULE_REGISTER(bulk, CONFIG_USBIP_LOG_LEVEL);

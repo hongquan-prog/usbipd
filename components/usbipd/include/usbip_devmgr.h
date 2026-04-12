@@ -13,8 +13,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include "hal/usbip_transport.h"
-#include "usbip_protocol.h"
+#include "usbip_common.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -11,20 +11,11 @@
 #ifndef USBIP_SERVER_H
 #define USBIP_SERVER_H
 
-#include "hal/usbip_transport.h"
-#include "hal/usbip_osal.h"
-#include "usbip_devmgr.h"
-#include "usbip_protocol.h"
-#include "usbip_conn.h"
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/*****************************************************************************
- * Forward Declarations
- *****************************************************************************/
-struct usbip_device_driver;
 
 /*****************************************************************************
  * Server Main Interface

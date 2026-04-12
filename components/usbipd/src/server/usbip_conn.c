@@ -21,9 +21,11 @@
 #include "hal/usbip_log.h"
 #include "hal/usbip_osal.h"
 #include "hal/usbip_transport.h"
-#include "usbip_protocol.h"
 #include "usbip_conn.h"
+#include "usbip_devmgr.h"
+#include "usbip_pack.h"
 #include "usbip_server.h"
+#include "usbip_urb.h"
 
 LOG_MODULE_REGISTER(conn, CONFIG_USBIP_LOG_LEVEL);
 
@@ -43,18 +45,22 @@ static void* usbip_conn_processor_thread(void* arg);
  *
  * Tracks all active connections and provides thread-safe access.
  */
-static struct {
-    struct usbip_connection* head;      /* Head of active connections list */
-    struct usbip_connection* tail;      /* Tail of active connections list */
-    struct osal_mutex lock;             /* Protects list operations */
-    int active_count;                   /* Current active connection count */
-    int max_connections;                /* Maximum allowed connections */
-} s_conn_manager = {
-    .head = NULL,
-    .tail = NULL,
-    .active_count = 0,
-    .max_connections = USBIP_MAX_CONNECTIONS
+struct conn_manager
+{
+    struct usbip_connection* head; /* Head of active connections list */
+    struct usbip_connection* tail; /* Tail of active connections list */
+    struct osal_mutex lock;        /* Protects list operations */
+    int active_count;              /* Current active connection count */
+    int max_connections;           /* Maximum allowed connections */
 };
+/* clang-format off */
+static struct conn_manager s_conn_manager = {                                                                                                                                  
+      .head = NULL,                                                                                                                                                              
+      .tail = NULL,                                                                                                                                                              
+      .active_count = 0,                                                                                                                                                         
+      .max_connections = USBIP_MAX_CONNECTIONS
+    };
+/* clang-format on */
 
 /*****************************************************************************
  * Connection Manager Operations
@@ -352,8 +358,7 @@ void usbip_connection_destroy(struct usbip_connection* conn)
  *
  * Return: 0 on success, -1 on failure
  */
-int usbip_connection_start(struct usbip_connection* conn,
-                           struct usbip_device_driver* driver,
+int usbip_connection_start(struct usbip_connection* conn, struct usbip_device_driver* driver,
                            const char* busid)
 {
     int ret;
@@ -501,6 +506,20 @@ void usbip_connection_stop(struct usbip_connection* conn)
     LOG_INF("Connection stopped for device %s", conn->busid);
 }
 
+static int usbip_recv_header(struct usbip_conn_ctx* ctx, struct usbip_header* hdr)
+{
+    ssize_t n;
+
+    n = transport_recv(ctx, hdr, sizeof(*hdr));
+    if (n != sizeof(*hdr))
+    {
+        return -1;
+    }
+
+    usbip_pack_header(hdr, 0);
+    return 0;
+}
+
 /*****************************************************************************
  * Per-Connection URB Processing Threads
  *****************************************************************************/
@@ -544,7 +563,8 @@ static void* usbip_conn_rx_thread(void* arg)
                 urb_data_len = USBIP_URB_DATA_MAX_SIZE;
             }
 
-            if (transport_recv(conn->transport_ctx, urb_data, urb_data_len) != (ssize_t)urb_data_len)
+            if (transport_recv(conn->transport_ctx, urb_data, urb_data_len) !=
+                (ssize_t)urb_data_len)
             {
                 LOG_ERR("RX: Failed to receive URB data for %s", conn->busid);
                 break;

@@ -22,8 +22,9 @@
 #include "hal/usbip_log.h"
 #include "hal/usbip_osal.h"
 #include "hal/usbip_transport.h"
+#include "usbip_conn.h"
 #include "usbip_devmgr.h"
-#include "usbip_protocol.h"
+#include "usbip_pack.h"
 #include "usbip_server.h"
 
 LOG_MODULE_REGISTER(server, CONFIG_USBIP_LOG_LEVEL);
@@ -40,6 +41,39 @@ static volatile int s_running = 1;
 
 static int usbip_server_handle_devlist(struct usbip_conn_ctx* ctx);
 static int usbip_server_handle_import_req(struct usbip_conn_ctx* ctx);
+
+/*****************************************************************************
+ * Protocol Send/Receive Functions
+ *****************************************************************************/
+
+static int usbip_recv_op_common(struct usbip_conn_ctx* ctx, struct op_common* op)
+{
+    ssize_t n;
+
+    n = transport_recv(ctx, op, sizeof(*op));
+    if (n != sizeof(*op))
+    {
+        return -1;
+    }
+
+    usbip_pack_op_common(op, 0); /* Network order to host order */
+    return 0;
+}
+
+static int usbip_send_op_common(struct usbip_conn_ctx* ctx, uint16_t code, uint32_t status)
+{
+    struct op_common op = {.version = USBIP_VERSION, .code = code, .status = status};
+    ssize_t n;
+
+    usbip_pack_op_common(&op, 1); /* Host order to network order */
+
+    n = transport_send(ctx, &op, sizeof(op));
+    if (n != sizeof(op))
+    {
+        return -1;
+    }
+    return 0;
+}
 
 /*****************************************************************************
  * OP_REQ_DEVLIST Processing
@@ -70,8 +104,7 @@ static int usbip_server_handle_devlist(struct usbip_conn_ctx* ctx)
     }
 
     /* Count total devices from all drivers */
-    for (driver = usbip_get_first_driver(); driver != NULL;
-         driver = usbip_get_next_driver(driver))
+    for (driver = usbip_get_first_driver(); driver != NULL; driver = usbip_get_next_driver(driver))
     {
         device_count += driver->get_device_count(driver);
     }
@@ -88,8 +121,7 @@ static int usbip_server_handle_devlist(struct usbip_conn_ctx* ctx)
     LOG_DBG("Sending %d device(s)", device_count);
 
     /* Send each device from all drivers */
-    for (driver = usbip_get_first_driver(); driver != NULL;
-         driver = usbip_get_next_driver(driver))
+    for (driver = usbip_get_first_driver(); driver != NULL; driver = usbip_get_next_driver(driver))
     {
         int drv_count = driver->get_device_count(driver);
 
@@ -145,6 +177,7 @@ static int usbip_server_handle_import_req(struct usbip_conn_ctx* ctx)
     struct usbip_device_driver* driver = NULL;
     const struct usbip_usb_device* found_dev = NULL;
     struct usbip_connection* conn = NULL;
+    struct usbip_usb_device reply_dev;
     int found = 0;
 
     /* Receive busid */
@@ -199,7 +232,6 @@ static int usbip_server_handle_import_req(struct usbip_conn_ctx* ctx)
     }
 
     /* Send device descriptor */
-    struct usbip_usb_device reply_dev;
     memcpy(&reply_dev, found_dev, sizeof(reply_dev));
     usbip_pack_usb_device(&reply_dev, 1);
 

@@ -68,7 +68,7 @@ usbip-server/
 │   │   ├── usbip_transport.c     # Transport core
 │   │   └── usbip_mempool.c       # Memory pool
 │   ├── server/                    # Server core
-│   │   ├── usbip_protocol.c      # Protocol encoding
+│   │   ├── usbip_pack.c          # Byte order conversion/packing
 │   │   ├── usbip_server.c        # Connection management
 │   │   ├── usbip_urb.c           # URB processing
 │   │   ├── usbip_devmgr.c        # Device management
