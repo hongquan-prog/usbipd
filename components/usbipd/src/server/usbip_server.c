@@ -142,9 +142,18 @@ static int usbip_server_handle_devlist(struct usbip_conn_ctx* ctx)
 
             /* Send interface information */
             memset(&iface, 0, sizeof(iface));
-            iface.bInterfaceClass = 0x03;
-            iface.bInterfaceSubClass = 0x01;
-            iface.bInterfaceProtocol = 0x01;
+            if (driver->get_interface)
+            {
+                driver->get_interface(driver, drv_idx, &iface);
+            }
+            else
+            {
+                LOG_WRN("Driver %s does not implement get_interface, using HID fallback",
+                        driver->name);
+                iface.bInterfaceClass = 0x03;
+                iface.bInterfaceSubClass = 0x01;
+                iface.bInterfaceProtocol = 0x01;
+            }
             usbip_pack_usb_interface(&iface, 1);
 
             if (transport_send(ctx, &iface, sizeof(iface)) != sizeof(iface))

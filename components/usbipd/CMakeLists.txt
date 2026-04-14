@@ -11,7 +11,6 @@ set(COMPONENT_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/server/usbip_control.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/server/usbip_pack.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/device/usbip_hid.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/device/usbip_bulk.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/hal/usbip_osal.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/hal/usbip_mempool.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/hal/usbip_transport.c

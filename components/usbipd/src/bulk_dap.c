@@ -129,54 +129,6 @@ static const struct usb_device_descriptor dap_v2_dev_desc = {
     .bNumConfigurations = 1,
 };
 
-/* Interface Association Descriptor (IAD) */
-struct usb_iad
-{
-    uint8_t bLength;
-    uint8_t bDescriptorType;
-    uint8_t bFirstInterface;
-    uint8_t bInterfaceCount;
-    uint8_t bFunctionClass;
-    uint8_t bFunctionSubClass;
-    uint8_t bFunctionProtocol;
-    uint8_t iFunction;
-} __attribute__((packed));
-
-/* CDC Class Descriptor */
-struct cdc_header_desc
-{
-    uint8_t bLength;
-    uint8_t bDescriptorType;
-    uint8_t bDescriptorSubType;
-    uint16_t bcdCDC;
-} __attribute__((packed));
-
-struct cdc_call_mgmt_desc
-{
-    uint8_t bLength;
-    uint8_t bDescriptorType;
-    uint8_t bDescriptorSubType;
-    uint8_t bmCapabilities;
-    uint8_t bDataInterface;
-} __attribute__((packed));
-
-struct cdc_acm_desc
-{
-    uint8_t bLength;
-    uint8_t bDescriptorType;
-    uint8_t bDescriptorSubType;
-    uint8_t bmCapabilities;
-} __attribute__((packed));
-
-struct cdc_union_desc
-{
-    uint8_t bLength;
-    uint8_t bDescriptorType;
-    uint8_t bDescriptorSubType;
-    uint8_t bMasterInterface;
-    uint8_t bSlaveInterface;
-} __attribute__((packed));
-
 /* DAP v2 Simple Config Descriptor - Single Interface */
 struct dap_v2_config_desc
 {
@@ -522,6 +474,24 @@ static const struct usbip_usb_device* vdap_v2_get_device(struct usbip_device_dri
     return NULL;
 }
 
+static int vdap_v2_get_interface(struct usbip_device_driver* driver, int index,
+                                 struct usbip_usb_interface* iface)
+{
+    (void)driver;
+
+    if (index != 0 || iface == NULL)
+    {
+        return -1;
+    }
+
+    iface->bInterfaceClass = dap_v2_cfg_desc.dap_intf.bInterfaceClass;
+    iface->bInterfaceSubClass = dap_v2_cfg_desc.dap_intf.bInterfaceSubClass;
+    iface->bInterfaceProtocol = dap_v2_cfg_desc.dap_intf.bInterfaceProtocol;
+    iface->padding = 0;
+
+    return 0;
+}
+
 static int vdap_v2_export_device(struct usbip_device_driver* driver, const char* busid,
                                  struct usbip_connection* conn)
 {
@@ -622,6 +592,7 @@ struct usbip_device_driver virtual_dap_v2_driver = {
     .get_device_count = vdap_v2_get_device_count,
     .get_device_by_index = vdap_v2_get_device_by_index,
     .get_device = vdap_v2_get_device,
+    .get_interface = vdap_v2_get_interface,
     .export_device = vdap_v2_export_device,
     .unexport_device = vdap_v2_unexport_device,
     .handle_urb = vdap_v2_handle_urb,

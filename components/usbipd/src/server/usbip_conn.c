@@ -16,6 +16,7 @@
  * URB processing threads.
  */
 
+#include <stdatomic.h>
 #include <string.h>
 
 #include "hal/usbip_log.h"
@@ -284,14 +285,8 @@ struct usbip_connection* usbip_connection_create(struct usbip_conn_ctx* ctx)
     }
 
     memset(conn, 0, sizeof(struct usbip_connection));
-
     conn->transport_ctx = ctx;
     conn->state = CONN_STATE_INIT;
-    conn->running = 0;
-    conn->driver = NULL;
-    conn->rx_thread_started = 0;
-    conn->processor_started = 0;
-    memset(conn->busid, 0, sizeof(conn->busid));
 
     /* Initialize state lock */
     ret = osal_mutex_init(&conn->state_lock);
@@ -388,7 +383,7 @@ int usbip_connection_start(struct usbip_connection* conn, struct usbip_device_dr
     }
 
     /* Mark as running before starting threads */
-    conn->running = 1;
+    atomic_store_explicit(&conn->running, 1, memory_order_seq_cst);
 
     /* Start processor thread first (waits on queue) */
     ret = osal_thread_create(&conn->processor_thread, usbip_conn_processor_thread, conn,
@@ -397,7 +392,7 @@ int usbip_connection_start(struct usbip_connection* conn, struct usbip_device_dr
     {
         LOG_ERR("Failed to create processor thread for %s", busid);
         usbip_urb_queue_destroy(&conn->urb_queue);
-        conn->running = 0;
+        atomic_store_explicit(&conn->running, 0, memory_order_seq_cst);
         return -1;
     }
     conn->processor_started = 1;
@@ -408,7 +403,7 @@ int usbip_connection_start(struct usbip_connection* conn, struct usbip_device_dr
     if (ret != OSAL_OK)
     {
         LOG_ERR("Failed to create RX thread for %s", busid);
-        conn->running = 0;
+        atomic_store_explicit(&conn->running, 0, memory_order_seq_cst);
         usbip_urb_queue_close(&conn->urb_queue);
         osal_thread_join(&conn->processor_thread);
         conn->processor_started = 0;
@@ -450,7 +445,7 @@ void usbip_connection_stop(struct usbip_connection* conn)
     {
         LOG_DBG("Stopping connection for device %s", conn->busid);
         conn->state = CONN_STATE_CLOSING;
-        conn->running = 0;
+        atomic_store_explicit(&conn->running, 0, memory_order_seq_cst);
     }
     osal_mutex_unlock(&conn->state_lock);
 
@@ -540,7 +535,7 @@ static void* usbip_conn_rx_thread(void* arg)
 
     LOG_DBG("RX thread started for %s", conn->busid);
 
-    while (conn->running)
+    while (atomic_load_explicit(&conn->running, memory_order_seq_cst))
     {
         int recv_ret = usbip_recv_header(conn->transport_ctx, &urb_cmd);
 
@@ -579,7 +574,7 @@ static void* usbip_conn_rx_thread(void* arg)
     }
 
     /* Signal connection to stop */
-    conn->running = 0;
+    atomic_store_explicit(&conn->running, 0, memory_order_seq_cst);
     usbip_urb_queue_close(&conn->urb_queue);
 
     LOG_DBG("RX thread exiting for %s", conn->busid);
@@ -609,7 +604,7 @@ static void* usbip_conn_processor_thread(void* arg)
 
     LOG_DBG("Processor thread started for %s", conn->busid);
 
-    while (conn->running)
+    while (atomic_load_explicit(&conn->running, memory_order_seq_cst))
     {
         if (usbip_urb_queue_pop(&conn->urb_queue, &urb_cmd, urb_data, &urb_data_len) < 0)
         {
@@ -629,6 +624,13 @@ static void* usbip_conn_processor_thread(void* arg)
         {
             LOG_ERR("Processor: URB handling error for %s", conn->busid);
             osal_free(data_out);
+            atomic_store_explicit(&conn->running, 0, memory_order_seq_cst);
+            usbip_urb_queue_close(&conn->urb_queue);
+            if (conn->transport_ctx)
+            {
+                transport_close(conn->transport_ctx);
+                conn->transport_ctx = NULL;
+            }
             break;
         }
 
@@ -639,6 +641,13 @@ static void* usbip_conn_processor_thread(void* arg)
             {
                 LOG_ERR("Processor: Failed to send URB reply for %s", conn->busid);
                 osal_free(data_out);
+                atomic_store_explicit(&conn->running, 0, memory_order_seq_cst);
+                usbip_urb_queue_close(&conn->urb_queue);
+                if (conn->transport_ctx)
+                {
+                    transport_close(conn->transport_ctx);
+                    conn->transport_ctx = NULL;
+                }
                 break;
             }
         }
@@ -647,7 +656,7 @@ static void* usbip_conn_processor_thread(void* arg)
     }
 
     /* Signal RX thread to stop if not already stopping */
-    conn->running = 0;
+    atomic_store_explicit(&conn->running, 0, memory_order_seq_cst);
 
     LOG_INF("Processor thread exiting for %s", conn->busid);
 

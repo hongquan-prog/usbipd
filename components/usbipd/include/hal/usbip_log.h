@@ -89,7 +89,7 @@ static inline void usbip_log_printf(int level, const char* tag, const unsigned c
 {
     va_list args;
     time_t now;
-    struct tm* tm_info;
+    struct tm tm_info;
     struct timespec ts;
     char time_buf[16];
     const char* level_str;
@@ -99,10 +99,10 @@ static inline void usbip_log_printf(int level, const char* tag, const unsigned c
     /* Get time */
     clock_gettime(CLOCK_REALTIME, &ts);
     now = ts.tv_sec;
-    tm_info = localtime(&now);
+    localtime_r(&now, &tm_info);
 
     /* Format timestamp: HH:MM:SS.mmm */
-    strftime(time_buf, sizeof(time_buf), "%H:%M:%S", tm_info);
+    strftime(time_buf, sizeof(time_buf), "%H:%M:%S", &tm_info);
 
     /* Level string and color */
     switch (level)
@@ -164,7 +164,7 @@ static inline void usbip_log_printf(int level, const char* tag, const unsigned c
     }
 
     fprintf(fp, "\n");
-    if (LOG_USE_COLOR && level != LOG_LEVEL_DBG)
+    if (LOG_USE_COLOR)
     {
         fprintf(fp, LOG_COLOR_NONE);
     }

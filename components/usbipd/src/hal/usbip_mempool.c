@@ -90,6 +90,12 @@ void osal_mempool_free(struct osal_mempool* pool, void* ptr)
     uintptr_t offset = (uint8_t*)ptr - pool->buffer;
     size_t idx = offset / pool->block_size;
 
+    if (offset % pool->block_size != 0)
+    {
+        /* Not aligned to block boundary */
+        return;
+    }
+
     if (idx >= pool->block_count)
     {
         /* Not in this pool */

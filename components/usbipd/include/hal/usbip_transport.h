@@ -39,25 +39,6 @@ struct usbip_conn_ctx
 };
 
 /**
- * transport_ops - Transport operations interface
- */
-typedef struct transport_ops transport_ops_t;
-
-struct transport_ops
-{
-    /**
-     * create - Create transport instance
-     * Return: Transport instance pointer, NULL on failure
-     */
-    struct usbip_transport* (*create)(void);
-
-    /**
-     * name - Transport name
-     */
-    const char* name;
-};
-
-/**
  * usbip_transport - Transport instance
  */
 struct usbip_transport

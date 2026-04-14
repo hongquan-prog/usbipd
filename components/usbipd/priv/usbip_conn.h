@@ -11,6 +11,7 @@
 #ifndef USBIP_CONN_H
 #define USBIP_CONN_H
 
+#include <stdatomic.h>
 #include <stddef.h>
 #include <stdint.h>
 #include "usbip_common.h"
@@ -82,7 +83,7 @@ struct usbip_conn_urb_queue
  */
 struct usbip_connection
 {
-    /* List management - must be first for list macros */
+    /* Doubly-linked list pointers for connection manager */
     struct usbip_connection* next;
     struct usbip_connection* prev;
 
@@ -101,7 +102,7 @@ struct usbip_connection
     struct usbip_conn_urb_queue urb_queue;
     struct osal_thread rx_thread;
     struct osal_thread processor_thread;
-    volatile int running;
+    atomic_int running;
 
     /* Flags for thread synchronization */
     int rx_thread_started;

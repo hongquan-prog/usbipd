@@ -76,6 +76,7 @@ struct device_registry_entry
 static struct device_registry_entry device_registry[MAX_BUSY_DEVICES];
 static struct device_registry_entry* hash_table[DEV_HASH_TABLE_SIZE];
 static int device_count = 0;
+static struct osal_mutex s_devmgr_lock;
 
 /*****************************************************************************
  * Hash Table Implementation
@@ -249,6 +250,11 @@ int usbip_devmgr_init(void)
 {
     dev_hash_init();
 
+    if (osal_mutex_init(&s_devmgr_lock) != OSAL_OK)
+    {
+        return -1;
+    }
+
     return 0;
 }
 
@@ -349,44 +355,54 @@ struct usbip_device_driver* usbip_get_next_driver(struct usbip_device_driver* cu
 int usbip_bind_device(const char* busid, struct usbip_connection* conn)
 {
     struct device_registry_entry* entry;
+    int ret = 0;
 
-    /* Check if already exists */
+    osal_mutex_lock(&s_devmgr_lock);
     entry = dev_hash_find(busid);
     if (entry != NULL)
     {
         if (entry->state == DEV_STATE_EXPORTED)
         {
             LOG_WRN("Device %s already exported", busid);
-            return -1;
+            ret = -1;
         }
-
-        entry->state = DEV_STATE_EXPORTED;
-        entry->owner = conn;
-        LOG_DBG("Device %s bound to connection %p", busid, (void*)conn);
-        return 0;
+        else
+        {
+            entry->state = DEV_STATE_EXPORTED;
+            entry->owner = conn;
+            LOG_DBG("Device %s bound to connection %p", busid, (void*)conn);
+        }
     }
-
-    /* Create new entry */
-    entry = dev_alloc_entry();
-    if (entry == NULL)
+    else
     {
-        LOG_ERR("Device registry full");
-        return -1;
+        entry = dev_alloc_entry();
+        if (entry == NULL)
+        {
+            LOG_ERR("Device registry full");
+            ret = -1;
+        }
+        else
+        {
+            strncpy(entry->busid, busid, SYSFS_BUS_ID_SIZE - 1);
+            entry->busid[SYSFS_BUS_ID_SIZE - 1] = '\0';
+            entry->state = DEV_STATE_EXPORTED;
+            entry->owner = conn;
+
+            if (dev_hash_insert(entry) < 0)
+            {
+                dev_free_entry(entry);
+                ret = -1;
+            }
+            else
+            {
+                LOG_DBG("Device %s bound to connection %p", busid, (void*)conn);
+            }
+        }
     }
 
-    strncpy(entry->busid, busid, SYSFS_BUS_ID_SIZE - 1);
-    entry->busid[SYSFS_BUS_ID_SIZE - 1] = '\0';
-    entry->state = DEV_STATE_EXPORTED;
-    entry->owner = conn;
+    osal_mutex_unlock(&s_devmgr_lock);
 
-    if (dev_hash_insert(entry) < 0)
-    {
-        dev_free_entry(entry);
-        return -1;
-    }
-
-    LOG_DBG("Device %s bound to connection %p", busid, (void*)conn);
-    return 0;
+    return ret;
 }
 
 /**
@@ -397,15 +413,18 @@ int usbip_bind_device(const char* busid, struct usbip_connection* conn)
  */
 void usbip_unbind_device(const char* busid)
 {
-    struct device_registry_entry* entry = dev_hash_find(busid);
+    struct device_registry_entry* entry;
 
+    osal_mutex_lock(&s_devmgr_lock);
+    entry = dev_hash_find(busid);
     if (entry != NULL)
     {
         dev_hash_remove(busid);
-        entry->state = DEV_STATE_AVAILABLE;
-        entry->owner = NULL;
+        dev_free_entry(entry);
         LOG_DBG("Device %s unbound", busid);
     }
+
+    osal_mutex_unlock(&s_devmgr_lock);
 }
 
 /**
@@ -416,9 +435,19 @@ void usbip_unbind_device(const char* busid)
  */
 struct usbip_connection* usbip_get_device_owner(const char* busid)
 {
-    struct device_registry_entry* entry = dev_hash_find(busid);
+    struct device_registry_entry* entry;
+    struct usbip_connection* owner = NULL;
 
-    return entry != NULL ? entry->owner : NULL;
+    osal_mutex_lock(&s_devmgr_lock);
+    entry = dev_hash_find(busid);
+    if (entry != NULL)
+    {
+        owner = entry->owner;
+    }
+
+    osal_mutex_unlock(&s_devmgr_lock);
+
+    return owner;
 }
 
 /**
@@ -429,14 +458,19 @@ struct usbip_connection* usbip_get_device_owner(const char* busid)
  */
 int usbip_is_device_available(const char* busid)
 {
-    struct device_registry_entry* entry = dev_hash_find(busid);
+    struct device_registry_entry* entry;
+    int available = 1;
 
+    osal_mutex_lock(&s_devmgr_lock);
+    entry = dev_hash_find(busid);
     if (entry != NULL)
     {
-        return entry->state == DEV_STATE_AVAILABLE;
+        available = entry->state == DEV_STATE_AVAILABLE;
     }
-    /* Device not in registry - consider available */
-    return 1;
+
+    osal_mutex_unlock(&s_devmgr_lock);
+
+    return available;
 }
 
 /*****************************************************************************
@@ -445,11 +479,14 @@ int usbip_is_device_available(const char* busid)
 
 void usbip_set_device_busy(const char* busid)
 {
-    struct device_registry_entry* entry = dev_hash_find(busid);
+    struct device_registry_entry* entry;
 
+    osal_mutex_lock(&s_devmgr_lock);
+    entry = dev_hash_find(busid);
     if (entry != NULL)
     {
         entry->state = DEV_STATE_EXPORTED;
+        osal_mutex_unlock(&s_devmgr_lock);
         return;
     }
 
@@ -463,22 +500,38 @@ void usbip_set_device_busy(const char* busid)
         entry->owner = NULL;
         dev_hash_insert(entry);
     }
+
+    osal_mutex_unlock(&s_devmgr_lock);
 }
 
 void usbip_set_device_available(const char* busid)
 {
-    struct device_registry_entry* entry = dev_hash_find(busid);
+    struct device_registry_entry* entry;
 
+    osal_mutex_lock(&s_devmgr_lock);
+    entry = dev_hash_find(busid);
     if (entry != NULL)
     {
-        entry->state = DEV_STATE_AVAILABLE;
-        entry->owner = NULL;
+        dev_hash_remove(busid);
+        dev_free_entry(entry);
     }
+
+    osal_mutex_unlock(&s_devmgr_lock);
 }
 
 int usbip_is_device_busy(const char* busid)
 {
-    struct device_registry_entry* entry = dev_hash_find(busid);
+    struct device_registry_entry* entry;
+    int busy = 0;
 
-    return entry != NULL && entry->state == DEV_STATE_EXPORTED;
+    osal_mutex_lock(&s_devmgr_lock);
+    entry = dev_hash_find(busid);
+    if (entry != NULL)
+    {
+        busy = entry->state == DEV_STATE_EXPORTED;
+    }
+
+    osal_mutex_unlock(&s_devmgr_lock);
+
+    return busy;
 }

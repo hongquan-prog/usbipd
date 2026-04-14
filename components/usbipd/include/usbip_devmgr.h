@@ -54,6 +54,16 @@ struct usbip_device_driver
                                struct usbip_usb_device* device);
 
     /**
+     * get_interface - Get interface info for device enumeration
+     * @driver: Driver instance
+     * @index: Device index
+     * @iface: Output interface info
+     * Return: 0 on success, -1 if index invalid
+     */
+    int (*get_interface)(struct usbip_device_driver* driver, int index,
+                         struct usbip_usb_interface* iface);
+
+    /**
      * get_device - Get device info by busid
      * @driver: Driver instance
      * @busid: Device bus ID, e.g., "1-1"

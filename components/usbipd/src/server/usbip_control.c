@@ -87,9 +87,15 @@ int usb_control_handle_setup(const struct usb_setup_packet* setup, struct usb_co
                 break;
 
             case USB_REQ_SET_INTERFACE:
-                /* Default support, no actual operation */
-                ctx->alt_setting[setup->wIndex & 0xFF] = setup->wValue & 0xFF;
-                ret = USB_CONTROL_OK_NO_DATA;
+                if ((setup->wIndex & 0xFF) < USB_MAX_INTERFACES)
+                {
+                    ctx->alt_setting[setup->wIndex & 0xFF] = setup->wValue & 0xFF;
+                    ret = USB_CONTROL_OK_NO_DATA;
+                }
+                else
+                {
+                    ret = USB_CONTROL_STALL;
+                }
                 break;
 
             case USB_REQ_GET_INTERFACE: {
@@ -202,11 +208,12 @@ int usb_control_get_descriptor(const struct usb_setup_packet* setup,
         case USB_DT_HID:
             if (ctx->hid_desc)
             {
-                *data_out = osal_malloc(USB_DT_HID_SIZE);
+                *data_out = osal_malloc(ctx->hid_desc->bLength);
                 if (*data_out)
                 {
-                    memcpy(*data_out, ctx->hid_desc, USB_DT_HID_SIZE);
-                    *data_len = USB_DT_HID_SIZE;
+                    memcpy(*data_out, ctx->hid_desc, ctx->hid_desc->bLength);
+                    *data_len = ctx->hid_desc->bLength;
+
                     return USB_CONTROL_OK;
                 }
             }

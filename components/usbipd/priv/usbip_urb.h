@@ -11,6 +11,9 @@
 #ifndef USBIP_URB_H
 #define USBIP_URB_H
 
+#include "hal/usbip_transport.h"
+#include "usbip_common.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif

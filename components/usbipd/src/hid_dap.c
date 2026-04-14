@@ -578,6 +578,24 @@ static const struct usbip_usb_device* vdap_get_device(struct usbip_device_driver
     return NULL;
 }
 
+static int vdap_get_interface(struct usbip_device_driver* driver, int index,
+                              struct usbip_usb_interface* iface)
+{
+    (void)driver;
+
+    if (index != 0 || iface == NULL)
+    {
+        return -1;
+    }
+
+    iface->bInterfaceClass = dap_cfg_desc.intf.bInterfaceClass;
+    iface->bInterfaceSubClass = dap_cfg_desc.intf.bInterfaceSubClass;
+    iface->bInterfaceProtocol = dap_cfg_desc.intf.bInterfaceProtocol;
+    iface->padding = 0;
+
+    return 0;
+}
+
 static int vdap_export_device(struct usbip_device_driver* driver, const char* busid,
                               struct usbip_connection* conn)
 {
@@ -688,6 +706,7 @@ struct usbip_device_driver virtual_dap_driver = {
     .get_device_count = vdap_get_device_count,
     .get_device_by_index = vdap_get_device_by_index,
     .get_device = vdap_get_device,
+    .get_interface = vdap_get_interface,
     .export_device = vdap_export_device,
     .unexport_device = vdap_unexport_device,
     .handle_urb = vdap_handle_urb,
