@@ -235,6 +235,11 @@ static void dap_v2_process_command(const void* data, size_t len)
 {
     LOG_HEX_DBG("[CMD] %zu bytes:", (const uint8_t*)data, len, len);
 
+    if (DAP_GetPacketSize() != BULK_DAP_PACKET_SIZE)
+    {
+        DAP_SetPacketSize(BULK_DAP_PACKET_SIZE);
+    }
+
     osal_mutex_lock(&vdap_v2.response_lock);
     /* Process command with global DAP lock */
     vdap_v2.response_len = dap_process_command_safety((const uint8_t*)data, vdap_v2.response) & 0xFFFF;
@@ -505,8 +510,6 @@ static int vdap_v2_export_device(struct usbip_device_driver* driver, const char*
     vdap_v2.exported = 1;
     vdap_v2.conn = conn;
     usbip_set_device_busy(busid);
-    /* Set DAP packet size for this device */
-    DAP_SetPacketSize(BULK_DAP_PACKET_SIZE);
 
     LOG_INF("Exported: %s", busid);
     return 0;

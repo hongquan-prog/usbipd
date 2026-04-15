@@ -311,6 +311,11 @@ static int dap_handle_data(uint8_t report_id, const void* data, size_t len, void
 
     LOG_HEX_DBG("[CMD] %zu bytes:", (const uint8_t*)data, len, len);
 
+    if (DAP_GetPacketSize() != HID_DAP_PACKET_SIZE)
+    {
+        DAP_SetPacketSize(HID_DAP_PACKET_SIZE);
+    }
+
     osal_mutex_lock(&vdap.response_lock);
     /* Process command with global DAP lock */
     vdap.response_len = dap_process_command_safety((const uint8_t*)data, vdap.response) & 0xFFFF;
@@ -609,8 +614,6 @@ static int vdap_export_device(struct usbip_device_driver* driver, const char* bu
     vdap.exported = 1;
     vdap.conn = conn;
     usbip_set_device_busy(busid);
-    /* Set DAP packet size for this device */
-    DAP_SetPacketSize(HID_DAP_PACKET_SIZE);
 
     LOG_INF("Exported: %s", busid);
     return 0;

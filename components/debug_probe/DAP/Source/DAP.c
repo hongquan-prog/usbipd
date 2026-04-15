@@ -46,12 +46,16 @@
  
  // Runtime configurable packet size (defaults to compile-time DAP_PACKET_SIZE)
  static uint16_t dap_packet_size = DAP_PACKET_SIZE;
- 
+
  // Set packet size at runtime
  void DAP_SetPacketSize(uint16_t size) {
    if (size >= 64U && size <= 32768U) {
      dap_packet_size = size;
    }
+ }
+ // Get current packet size
+ uint16_t DAP_GetPacketSize(void) {
+   return dap_packet_size;
  }
  
  
