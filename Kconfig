@@ -32,7 +32,7 @@ menu "URB Queue Configuration"
 
 config USBIP_URB_QUEUE_SIZE
     int "URB queue slots per connection"
-    default 8
+    default 2
     range 4 64
     help
         Number of URB slots in the per-connection queue.
@@ -67,7 +67,7 @@ config USBIP_URB_DATA_MAX_SIZE
 
 config USBIP_MAX_CONNECTIONS
     int "Maximum simultaneous device connections"
-    default 4
+    default 2
     range 1 16
     help
         Maximum number of USB devices that can be exported simultaneously.
@@ -78,6 +78,18 @@ config USBIP_MAX_CONNECTIONS
 
         For single-device setups (e.g., one DAP), 1-2 is sufficient.
         For multi-probe setups, increase as needed.
+
+config USBIP_MAX_DRIVERS
+    int "Maximum registered device drivers"
+    default 4
+    range 1 16
+    help
+        Maximum number of device drivers that can be registered.
+
+        Each registered driver consumes one pointer slot in the
+        internal driver registry. For typical setups with 1-2
+        drivers (e.g., HID DAP and Bulk DAP), the default of 4
+        is sufficient.
 
 endmenu
 
