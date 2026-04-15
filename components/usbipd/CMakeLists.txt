@@ -42,6 +42,7 @@ if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
         -Wl,-u,transport_register_tcp
         -Wl,-u,hid_dap_driver_register
         -Wl,-u,bulk_dap_driver_register
+        -Wl,-u,dap_lock_init
     )
 endif()
 

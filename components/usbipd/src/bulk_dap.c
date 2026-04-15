@@ -40,8 +40,8 @@ extern uint32_t dap_process_command_safety(const uint8_t* request, uint8_t* resp
  * DAP v2 Device Configuration
  *****************************************************************************/
 
-#define BULK_DAP_VID 0xFAED
-#define BULK_DAP_PID 0x4873
+#define BULK_DAP_VID 0x0D28
+#define BULK_DAP_PID 0x0204
 #define BULK_DAP_PACKET_SIZE 512 /* High Speed Bulk packet size */
 
 /* Compile-time check: BULK_DAP_PACKET_SIZE must not exceed CONFIG_USBIP_URB_DATA_MAX_SIZE */
