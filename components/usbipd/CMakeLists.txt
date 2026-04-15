@@ -18,6 +18,7 @@ set(COMPONENT_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/posix/transport_tcp.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/hid_dap.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/bulk_dap.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/server/usbipd.c
 )
 
 add_library(${COMPONENT_NAME} STATIC ${COMPONENT_SRCS})

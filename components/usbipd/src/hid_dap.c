@@ -721,13 +721,13 @@ struct usbip_device_driver virtual_dap_driver = {
  * Auto-Register on Program Startup
  *****************************************************************************/
 
-void __attribute__((constructor, used)) dap_lock_init(void)
+void __attribute__((section(".usbip.init"), used)) dap_lock_init(void)
 {
     /* Initialize global DAP lock before any DAP device can use it */
     osal_mutex_init(&s_dap_lock);
 }
 
-void __attribute__((constructor, used)) hid_dap_driver_register(void)
+void __attribute__((section(".usbip.init"), used)) hid_dap_driver_register(void)
 {
     usbip_register_driver(&virtual_dap_driver);
 }

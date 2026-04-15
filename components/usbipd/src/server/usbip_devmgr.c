@@ -289,7 +289,7 @@ int usbip_register_driver(struct usbip_device_driver* driver)
         return -1;
     }
 
-    LOG_DBG("Registered driver: %s", driver->name);
+    LOG_INF("Registered driver: %s", driver->name);
 
     return 0;
 }

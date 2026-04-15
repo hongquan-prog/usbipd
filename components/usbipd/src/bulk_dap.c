@@ -607,7 +607,7 @@ struct usbip_device_driver virtual_dap_v2_driver = {
  * Auto-Register on Program Startup
  *****************************************************************************/
 
-void __attribute__((constructor, used)) bulk_dap_driver_register(void)
+void __attribute__((section(".usbip.init"), used)) bulk_dap_driver_register(void)
 {
     usbip_register_driver(&virtual_dap_v2_driver);
 }

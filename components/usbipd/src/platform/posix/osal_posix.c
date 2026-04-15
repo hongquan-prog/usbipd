@@ -269,4 +269,7 @@ static osal_ops_t posix_ops = {
 /**
  * Auto-register POSIX implementation
  */
-OSAL_REGISTER(posix, posix_ops);
+__attribute__((section(".usbip.init"), used)) void default_os_register(void)
+{
+    osal_register("posix", &posix_ops);
+}

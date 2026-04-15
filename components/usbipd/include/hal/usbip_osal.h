@@ -89,17 +89,6 @@ int osal_register(const char* platform, const osal_ops_t* ops);
  */
 const osal_ops_t* osal_get_ops(void);
 
-/**
- * OSAL_REGISTER - Auto-registration macro
- * @platform: Platform name
- * @ops: osal_ops_t variable name
- */
-#define OSAL_REGISTER(platform, ops)                                                               \
-    __attribute__((constructor, used)) void osal_register_##platform(void)                        \
-    {                                                                                              \
-        osal_register(#platform, &ops);                                                            \
-    }
-
 /*****************************************************************************
  * Unified Interface Wrapper Functions
  *****************************************************************************/

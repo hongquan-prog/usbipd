@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "usbipd.h"
 
 #include "hal/usbip_log.h"
 #include "usbip_server.h"
@@ -97,17 +98,7 @@ int main(int argc, char* argv[])
     setup_signals();
 
     /* Initialize server */
-    if (usbip_server_init(port) < 0)
-    {
-        usbip_server_cleanup();
-        return 1;
-    }
-
-    /* Run server */
-    usbip_server_run();
-
-    /* Cleanup */
-    usbip_server_cleanup();
+    usbipd_init(port);
 
     LOG_INF("Server stopped");
 
