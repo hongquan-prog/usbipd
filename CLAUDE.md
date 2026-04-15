@@ -6,10 +6,17 @@
 ../../src/linux-6.12.75/drivers/usb/usbip
 ```
 
+## 提交代码
+
+* 提交代码的格式参考Zephyr的提交规范
+* 提交代码不要包含Claude的签名
+
 ## 代码规范
 
 * 统一采用英语编写注释，便于国际团队合作
 * 每次修改后必须使用 clang-format 格式化代码，排除 components 目录下的文件
+* 一定不要使用goto语句
+* 修改现有代码时不要去做一些无意义的操作，例如删除现有注释，添加空行等
 
 ### 配置文件
 - `.clang-format` - ClangFormat 配置
@@ -191,79 +198,112 @@ cmake --build build
 
 ```
 usbip-server/
-├── include/
-│   ├── hal/                    # HAL 层头文件
-│   │   ├── usbip_log.h         # 日志系统（支持颜色）
-│   │   ├── usbip_osal.h        # OSAL 接口
-│   │   └── usbip_transport.h   # 传输层接口
-│   ├── usbip_protocol.h         # USBIP 协议定义
-│   ├── usbip_devmgr.h           # 设备驱动接口
-│   ├── usbip_server.h           # 服务器接口
-│   └── ...
 ├── src/
-│   ├── hal/                     # HAL 层实现
-│   │   ├── usbip_log.c          # 日志系统
-│   │   ├── usbip_osal.c         # OSAL 核心
-│   │   └── usbip_transport.c    # 传输层核心
-│   ├── transport_tcp.c          # TCP 传输实现（自动注册）
-│   ├── server/                  # 服务器核心
-│   │   ├── usbip_protocol.c     # 协议编解码
-│   │   ├── usbip_server.c       # 连接管理
-│   │   ├── usbip_urb.c          # URB 处理
-│   │   ├── usbip_devmgr.c       # 设备管理
-│   │   └── usbip_control.c      # 控制传输框架
-│   ├── device/                  # 设备驱动
-│   │   ├── usbip_hid.c          # HID 基类
-│   │   ├── usbip_bulk.c         # Bulk 基类
-│   │   └── ...
-│   └── main.c                   # 主程序
-└── components/                  # 第三方组件
-    └── debug_probe/             # CMSIS-DAP 实现
+│   └── main.c                   # 主程序入口
+├── components/
+│   ├── usbipd/                  # USBIP 服务器核心组件
+│   │   ├── include/
+│   │   │   ├── hal/             # HAL 层头文件
+│   │   │   │   ├── usbip_log.h  # 日志系统（支持颜色）
+│   │   │   │   ├── usbip_osal.h # OSAL 接口
+│   │   │   │   └── usbip_transport.h  # 传输层接口
+│   │   │   ├── usbip_common.h   # 公共定义与 USBIP 协议常量
+│   │   │   ├── usbip_devmgr.h   # 设备驱动接口
+│   │   │   ├── usbip_server.h   # 服务器接口
+│   │   │   ├── usbip_control.h  # 控制传输框架
+│   │   │   └── usbip_hid.h      # HID 设备接口
+│   │   ├── priv/                # 私有头文件（内部实现）
+│   │   │   ├── usbip_conn.h     # 连接管理（内部）
+│   │   │   ├── usbip_pack.h     # 字节序转换函数
+│   │   │   └── usbip_urb.h      # URB 队列接口（内部）
+│   │   └── src/
+│   │       ├── hal/             # HAL 层实现
+│   │       │   ├── usbip_mempool.c  # 内存池管理
+│   │       │   ├── usbip_osal.c # OSAL 核心
+│   │       │   └── usbip_transport.c  # 传输层核心
+│   │       ├── platform/posix/  # POSIX 平台实现
+│   │       │   ├── osal_posix.c # POSIX OSAL 实现
+│   │       │   └── transport_tcp.c    # TCP 传输实现
+│   │       ├── server/          # 服务器核心
+│   │       │   ├── usbip_pack.c       # 字节序转换/打包函数
+│   │       │   ├── usbip_server.c     # 服务器主循环（接受连接）
+│   │       │   ├── usbip_conn.c       # 连接生命周期管理（多客户端）
+│   │       │   ├── usbip_urb.c        # URB 队列处理
+│   │       │   ├── usbip_devmgr.c     # 设备管理（设备绑定到连接）
+│   │       │   └── usbip_control.c    # 控制传输框架
+│   │       ├── device/          # 设备驱动
+│   │       │   ├── usbip_hid.c  # HID 通用设备基类
+│   │       │   └── usbip_bulk.c # Bulk 通用设备基类
+│   │       ├── hid_dap.c        # CMSIS-DAP v1 HID 设备
+│   │       └── bulk_dap.c       # CMSIS-DAP v2 Bulk 设备
+│   └── debug_probe/             # CMSIS-DAP 调试探针实现
+│       ├── DAP/
+│       ├── debug_gpio.c
+│       └── ...
+└── ...
 ```
 
 ## 关键文件
 
 ### 核心架构
-- `include/hal/usbip_transport.h` - 传输层接口
-- `include/hal/usbip_log.h` - 日志系统接口
-- `include/usbip_protocol.h` - USBIP 协议定义
-- `include/usbip_devmgr.h` - 设备驱动接口
-- `src/server/usbip_urb.c` - URB 处理框架
-- `src/server/usbip_devmgr.c` - 设备管理器
-- `src/transport_tcp.c` - TCP 传输实现
+- `components/usbipd/include/hal/usbip_transport.h` - 传输层接口
+- `components/usbipd/include/hal/usbip_log.h` - 日志系统接口
+- `components/usbipd/include/usbip_common.h` - 公共定义与 USBIP 协议常量
+- `components/usbipd/priv/usbip_conn.h` - 连接管理接口（内部）
+- `components/usbipd/priv/usbip_pack.h` - 字节序转换函数（内部）
+- `components/usbipd/priv/usbip_urb.h` - URB 队列接口（内部）
+- `components/usbipd/include/usbip_devmgr.h` - 设备驱动接口
+- `components/usbipd/include/usbip_server.h` - 服务器接口（含发送/接收函数声明）
+- `components/usbipd/src/server/usbip_server.c` - 服务器主循环，协议发送/接收函数
+- `components/usbipd/src/server/usbip_pack.c` - 字节序转换/打包函数
+- `components/usbipd/src/server/usbip_conn.c` - 连接生命周期管理（多客户端核心）
+- `components/usbipd/src/server/usbip_urb.c` - URB 处理框架（每连接队列）
+- `components/usbipd/src/server/usbip_devmgr.c` - 设备管理器（设备绑定到连接）
+- `components/usbipd/src/platform/posix/transport_tcp.c` - TCP 传输实现
 
 ### 设备驱动
-- `src/hid_dap.c` - CMSIS-DAP v1 HID 设备
-- `src/bulk_dap.c` - CMSIS-DAP v2 Bulk 设备 (主要调试设备)
-- `src/device/usbip_hid.c` - HID 通用设备基类
-- `src/device/usbip_bulk.c` - Bulk 通用设备基类
+- `components/usbipd/src/hid_dap.c` - CMSIS-DAP v1 HID 设备（绑定到 `usbip_connection*`）
+- `components/usbipd/src/bulk_dap.c` - CMSIS-DAP v2 Bulk 设备（绑定到 `usbip_connection*`）
+- `components/usbipd/src/device/usbip_hid.c` - HID 通用设备基类
+- `components/usbipd/src/device/usbip_bulk.c` - Bulk 通用设备基类
 
 ### 调试探针
 - `components/debug_probe/debug_gpio.c` - GPIO bit-banging SWD 实现
 - `components/debug_probe/debug_gpio.h` - GPIO 引脚定义
-- `components/debug_probe/swd.c` - SWD 协议实现
 - `components/debug_probe/DAP/Source/DAP.c` - CMSIS-DAP 核心实现
 
 ### 编译配置
-- `CMakeLists.txt` - CMake 构建配置
+- `CMakeLists.txt` - 根目录 CMake 构建配置
+- `components/usbipd/CMakeLists.txt` - USBIP 组件 CMake 配置
 
 ## 设计模式
 
 ### 传输层全局单例
 - 使用 `__attribute__((constructor))` 在程序启动时自动注册
-- 通过 `transport_set_global()` 设置全局实例
+- 调用内部 `transport_register()` 注册全局实例
 - 使用 wrapper 函数访问：`transport_listen()`, `transport_send()` 等
 
 ```c
 /* transport_tcp.c - 自动注册 */
-static void __attribute__((constructor)) tcp_transport_register(void)
+extern void transport_register(const char* name, struct usbip_transport* trans);
+
+static void __attribute__((constructor)) transport_register_tcp(void)
 {
-    struct usbip_transport* trans = tcp_transport_create();
-    if (trans)
-    {
-        transport_set_global(trans);
-    }
+    transport_register("tcp", &trans);
 }
+```
+
+### 静态库构造函数保留
+静态库的构造函数（`__attribute__((constructor))`）可能被链接器优化掉，使用 `-Wl,-u,symbol` 强制保留：
+
+```cmake
+# components/usbipd/CMakeLists.txt
+target_link_options(${COMPONENT_NAME} INTERFACE
+    -Wl,-u,osal_register_posix
+    -Wl,-u,transport_register_tcp
+    -Wl,-u,hid_dap_driver_register
+    -Wl,-u,bulk_dap_driver_register
+)
 ```
 
 ### 日志系统
@@ -278,6 +318,25 @@ LOG_ERR("Error: %d", err);
 LOG_WRN("Warning: %s", msg);
 LOG_INF("Info: %s", msg);
 LOG_DBG("Debug: %s", msg);
+```
+
+### 多客户端连接管理
+- 每个设备连接有独立的 URB 处理线程（RX + Processor 双线程）
+- 连接管理器跟踪所有活动连接，支持动态添加/移除
+- 设备绑定到特定连接，防止重复导出
+- 连接断开时自动解绑设备，恢复可用状态
+
+```c
+/* 连接生命周期 */
+struct usbip_connection* conn = usbip_connection_create(ctx);
+usbip_connection_start(conn, driver, busid);  /* 启动 RX/Processor 线程 */
+/* ... URB 处理 ... */
+usbip_connection_stop(conn);      /* 停止线程，解绑设备 */
+usbip_connection_destroy(conn);   /* 释放资源 */
+
+/* 设备绑定到连接 */
+int usbip_bind_device(const char* busid, struct usbip_connection* conn);
+void usbip_unbind_device(const char* busid);
 ```
 
 ## GPIO 引脚配置 (Raspberry Pi 5)
@@ -309,7 +368,12 @@ vim .config
 
 # 示例：修改端口和日志级别
 CONFIG_USBIP_SERVER_PORT=3241
-CONFIG_LOG_SERVER_LEVEL=4
+CONFIG_USBIP_LOG_LEVEL=4
+
+# 示例：URB 队列配置（高延迟网络或高吞吐量场景）
+CONFIG_USBIP_URB_QUEUE_SIZE=16       # 默认 8，增大可提高吞吐量
+CONFIG_USBIP_URB_DATA_MAX_SIZE=1024  # 默认 512，Bulk 设备可增大
+CONFIG_USBIP_MAX_CONNECTIONS=2       # 默认 4，限制并发连接数
 
 # 2. 重新生成配置
 python scripts/gen_config.py
@@ -345,10 +409,11 @@ sudo modprobe vhci-hcd
 # 启动服务器后台运行
 sudo build/usbip-server &
 
-# 服务器一次只能连接一个设备，只能同时连接一个设备
-# 附加设备
+# 多客户端支持：每个设备可以被不同客户端同时连接
+# 附加设备 (客户端1)
 # HID DAP v1 调试器 (2-1)
 sudo usbip attach -r localhost -b 2-1
+# 附加设备 (客户端2)
 # Bulk DAP v2 调试器 (2-2)
 sudo usbip attach -r localhost -b 2-2
 ```
@@ -369,14 +434,15 @@ sudo usbip attach -r localhost -b 2-2
 ## 已知问题
 
 ### PyOCD 兼容性
-- PyOCD 与虚拟 Bulk 设备 (2-2) 存在兼容性问题
+- PyOCD 存在兼容性问题，需按照 `docs/PYOCD_COMPATIBILITY.md` 中的补丁进行修复
 - 推荐使用 OpenOCD 进行稳定的调试操作
 
 ## 开发注意事项
 
-1. **响应缓存**: `hid_dap.c` 中的响应缓存逻辑需要小心处理，确保 `response_pending` 和 `response_valid` 标志正确清除
+1. **响应缓存**: `components/usbipd/src/hid_dap.c` 中的响应缓存逻辑需要小心处理，确保 `response_pending` 和 `response_valid` 标志正确清除
 2. **IN 端点 STALL**: 当无数据时返回 `-EPIPE` 而不是 `actual_length=0`
 3. **GPIO 初始化**: 使用 `pinctrl` 预先设置 GPIO 为输出模式
+4. **组件化结构**: USBIP 核心实现已重构为 `components/usbipd/` 目录下的独立组件
 
 ## 测试验证结果
 

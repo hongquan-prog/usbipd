@@ -21,8 +21,6 @@
 #include <string.h>
 
 #include "hal/usbip_log.h"
-#include "hal/usbip_transport.h"
-#include "usbip_devmgr.h"
 #include "usbip_server.h"
 
 LOG_MODULE_REGISTER(main, CONFIG_MAIN_LOG_LEVEL);
