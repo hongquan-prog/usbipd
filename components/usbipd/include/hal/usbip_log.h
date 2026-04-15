@@ -40,7 +40,7 @@ extern "C" {
 
 /* Color enable control */
 #ifndef LOG_USE_COLOR
-#    define LOG_USE_COLOR 1
+#define LOG_USE_COLOR 1
 #endif
 
 /*****************************************************************************
@@ -55,7 +55,7 @@ extern "C" {
 
 /* Default global log level */
 #ifndef LOG_GLOBAL_LEVEL
-#    define LOG_GLOBAL_LEVEL LOG_LEVEL_INF
+#define LOG_GLOBAL_LEVEL LOG_LEVEL_INF
 #endif
 
 /*****************************************************************************
