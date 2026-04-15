@@ -31,8 +31,15 @@ if(ENABLE_PROGRAM OR ENABLE_GDB_SERVER)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
 endif()
 
+option(ENABLE_ASAN "Enable AddressSanitizer" OFF)
+
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     add_compile_options(-Wall -Wextra -Wunused-function -Wunused-variable -Wunused-parameter)
+endif()
+
+if(ENABLE_ASAN)
+    add_compile_options(-fsanitize=address -g -O0)
+    add_link_options(-fsanitize=address)
 endif()
 
 # 组件子目录
