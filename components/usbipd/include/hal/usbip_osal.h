@@ -39,13 +39,13 @@ typedef struct osal_ops osal_ops_t;
 struct osal_ops
 {
     /* Mutex */
-    int (*mutex_init)(void* handle);
+    int (*mutex_init)(void** handle);
     int (*mutex_lock)(void* handle);
     int (*mutex_unlock)(void* handle);
     void (*mutex_destroy)(void* handle);
 
     /* Condition variable */
-    int (*cond_init)(void* handle);
+    int (*cond_init)(void** handle);
     int (*cond_wait)(void* cond, void* mutex);
     int (*cond_timedwait)(void* cond, void* mutex, uint32_t timeout_ms);
     int (*cond_signal)(void* cond);
@@ -53,7 +53,7 @@ struct osal_ops
     void (*cond_destroy)(void* handle);
 
     /* Thread */
-    int (*thread_create)(void* handle, void* (*func)(void*), void* arg, size_t stack_size,
+    int (*thread_create)(void** handle, void* (*func)(void*), void* arg, size_t stack_size,
                          int priority);
     int (*thread_join)(void* handle);
     int (*thread_detach)(void* handle);

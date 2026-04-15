@@ -14,7 +14,6 @@
  * OS Abstraction Layer core implementation: registry + interface call entry
  */
 
-#include <pthread.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -69,36 +68,25 @@ int osal_mutex_init(struct osal_mutex* mutex)
 {
     const osal_ops_t* ops = osal_get_ops();
 
-    if (!ops || !ops->mutex_init)
+    if (!ops || !ops->mutex_init || !mutex)
     {
         return OSAL_ERROR;
     }
 
-    pthread_mutex_t* pm = ops->malloc(sizeof(pthread_mutex_t));
+    mutex->handle = NULL;
 
-    if (!pm)
-    {
-        return OSAL_ERROR;
-    }
-
-    if (ops->mutex_init(pm) != OSAL_OK)
-    {
-        ops->free(pm);
-        return OSAL_ERROR;
-    }
-
-    mutex->handle = pm;
-    return OSAL_OK;
+    return ops->mutex_init(&mutex->handle);
 }
 
 int osal_mutex_lock(struct osal_mutex* mutex)
 {
     const osal_ops_t* ops = osal_get_ops();
 
-    if (!ops || !ops->mutex_lock || !mutex->handle)
+    if (!ops || !ops->mutex_lock || !mutex || !mutex->handle)
     {
         return OSAL_ERROR;
     }
+
     return ops->mutex_lock(mutex->handle);
 }
 
@@ -106,10 +94,11 @@ int osal_mutex_unlock(struct osal_mutex* mutex)
 {
     const osal_ops_t* ops = osal_get_ops();
 
-    if (!ops || !ops->mutex_unlock || !mutex->handle)
+    if (!ops || !ops->mutex_unlock || !mutex || !mutex->handle)
     {
         return OSAL_ERROR;
     }
+
     return ops->mutex_unlock(mutex->handle);
 }
 
@@ -117,19 +106,12 @@ void osal_mutex_destroy(struct osal_mutex* mutex)
 {
     const osal_ops_t* ops = osal_get_ops();
 
-    if (!ops || !mutex->handle)
+    if (!ops || !ops->mutex_destroy || !mutex || !mutex->handle)
     {
         return;
     }
 
-    if (ops->mutex_destroy)
-    {
-        ops->mutex_destroy(mutex->handle);
-    }
-    if (ops->free)
-    {
-        ops->free(mutex->handle);
-    }
+    ops->mutex_destroy(mutex->handle);
     mutex->handle = NULL;
 }
 
@@ -141,33 +123,20 @@ int osal_cond_init(struct osal_cond* cond)
 {
     const osal_ops_t* ops = osal_get_ops();
 
-    if (!ops || !ops->cond_init)
+    if (!ops || !ops->cond_init || !cond)
     {
         return OSAL_ERROR;
     }
 
-    pthread_cond_t* pc = ops->malloc(sizeof(pthread_cond_t));
-
-    if (!pc)
-    {
-        return OSAL_ERROR;
-    }
-
-    if (ops->cond_init(pc) != OSAL_OK)
-    {
-        ops->free(pc);
-        return OSAL_ERROR;
-    }
-
-    cond->handle = pc;
-    return OSAL_OK;
+    cond->handle = NULL;
+    return ops->cond_init(&cond->handle);
 }
 
 int osal_cond_wait(struct osal_cond* cond, struct osal_mutex* mutex)
 {
     const osal_ops_t* ops = osal_get_ops();
 
-    if (!ops || !ops->cond_wait || !cond->handle || !mutex->handle)
+    if (!ops || !ops->cond_wait || !cond || !cond->handle || !mutex || !mutex->handle)
     {
         return OSAL_ERROR;
     }
@@ -178,7 +147,7 @@ int osal_cond_timedwait(struct osal_cond* cond, struct osal_mutex* mutex, uint32
 {
     const osal_ops_t* ops = osal_get_ops();
 
-    if (!ops || !ops->cond_timedwait || !cond->handle || !mutex->handle)
+    if (!ops || !ops->cond_timedwait || !cond || !cond->handle || !mutex || !mutex->handle)
     {
         return OSAL_ERROR;
     }
@@ -189,7 +158,7 @@ int osal_cond_signal(struct osal_cond* cond)
 {
     const osal_ops_t* ops = osal_get_ops();
 
-    if (!ops || !ops->cond_signal || !cond->handle)
+    if (!ops || !ops->cond_signal || !cond || !cond->handle)
     {
         return OSAL_ERROR;
     }
@@ -200,7 +169,7 @@ int osal_cond_broadcast(struct osal_cond* cond)
 {
     const osal_ops_t* ops = osal_get_ops();
 
-    if (!ops || !ops->cond_broadcast || !cond->handle)
+    if (!ops || !ops->cond_broadcast || !cond || !cond->handle)
     {
         return OSAL_ERROR;
     }
@@ -211,19 +180,12 @@ void osal_cond_destroy(struct osal_cond* cond)
 {
     const osal_ops_t* ops = osal_get_ops();
 
-    if (!ops || !cond->handle)
+    if (!ops || !ops->cond_destroy || !cond || !cond->handle)
     {
         return;
     }
 
-    if (ops->cond_destroy)
-    {
-        ops->cond_destroy(cond->handle);
-    }
-    if (ops->free)
-    {
-        ops->free(cond->handle);
-    }
+    ops->cond_destroy(cond->handle);
     cond->handle = NULL;
 }
 
@@ -236,41 +198,27 @@ int osal_thread_create(struct osal_thread* thread, osal_thread_func func, void* 
 {
     const osal_ops_t* ops = osal_get_ops();
 
-    if (!ops || !ops->thread_create)
+    if (!ops || !ops->thread_create || !thread)
     {
         return OSAL_ERROR;
     }
 
-    pthread_t* pt = ops->malloc(sizeof(pthread_t));
-
-    if (!pt)
-    {
-        return OSAL_ERROR;
-    }
-
-    if (ops->thread_create(pt, (void* (*)(void*))func, arg, stack_size, priority) != OSAL_OK)
-    {
-        ops->free(pt);
-        return OSAL_ERROR;
-    }
-
-    thread->handle = pt;
-    return OSAL_OK;
+    thread->handle = NULL;
+    return ops->thread_create(&thread->handle, (void* (*)(void*))func, arg, stack_size, priority);
 }
 
 int osal_thread_join(struct osal_thread* thread)
 {
     const osal_ops_t* ops = osal_get_ops();
 
-    if (!ops || !ops->thread_join || !thread->handle)
+    if (!ops || !ops->thread_join || !thread || !thread->handle)
     {
         return OSAL_ERROR;
     }
 
     int ret = ops->thread_join(thread->handle);
-    if (ret == OSAL_OK && ops->free)
+    if (ret == OSAL_OK)
     {
-        ops->free(thread->handle);
         thread->handle = NULL;
     }
     return ret;
@@ -280,15 +228,14 @@ int osal_thread_detach(struct osal_thread* thread)
 {
     const osal_ops_t* ops = osal_get_ops();
 
-    if (!ops || !ops->thread_detach || !thread->handle)
+    if (!ops || !ops->thread_detach || !thread || !thread->handle)
     {
         return OSAL_ERROR;
     }
 
     int ret = ops->thread_detach(thread->handle);
-    if (ret == OSAL_OK && ops->free)
+    if (ret == OSAL_OK)
     {
-        ops->free(thread->handle);
         thread->handle = NULL;
     }
     return ret;
@@ -298,7 +245,7 @@ int osal_thread_delete(struct osal_thread* thread)
 {
     const osal_ops_t* ops = osal_get_ops();
 
-    if (!ops || !ops->thread_delete || !thread->handle)
+    if (!ops || !ops->thread_delete || !thread || !thread->handle)
     {
         return OSAL_ERROR;
     }
@@ -343,6 +290,7 @@ void* osal_malloc(size_t size)
     {
         return NULL;
     }
+
     return ops->malloc(size);
 }
 
