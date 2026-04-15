@@ -35,7 +35,10 @@ struct usbip_connection;
  * Driver Registry
  *****************************************************************************/
 
-#define MAX_DRIVERS 16
+#ifndef CONFIG_USBIP_MAX_DRIVERS
+#define CONFIG_USBIP_MAX_DRIVERS 4
+#endif
+#define MAX_DRIVERS CONFIG_USBIP_MAX_DRIVERS
 
 static struct usbip_device_driver* driver_registry[MAX_DRIVERS];
 static int driver_count = 0;
@@ -56,7 +59,7 @@ enum device_state {
  * Device Registry with Hash Table (O(1) lookup)
  *****************************************************************************/
 
-#define MAX_BUSY_DEVICES 32
+#define MAX_BUSY_DEVICES CONFIG_USBIP_MAX_CONNECTIONS
 #define DEV_HASH_TABLE_SIZE 16  /* Power of 2 for efficient masking */
 
 /**
