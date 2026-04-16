@@ -263,9 +263,12 @@ int usbip_devmgr_init(void)
 
 int usbip_register_driver(struct usbip_device_driver* driver)
 {
+    osal_mutex_lock(&s_devmgr_lock);
     if (driver_count >= MAX_DRIVERS)
     {
+        osal_mutex_unlock(&s_devmgr_lock);
         LOG_ERR("Driver registry full");
+
         return -1;
     }
 
@@ -274,7 +277,9 @@ int usbip_register_driver(struct usbip_device_driver* driver)
     {
         if (driver_registry[i] == driver)
         {
+            osal_mutex_unlock(&s_devmgr_lock);
             LOG_WRN("Driver already registered: %s", driver->name);
+
             return -1;
         }
     }
@@ -284,11 +289,14 @@ int usbip_register_driver(struct usbip_device_driver* driver)
     /* Call driver initialization */
     if (driver->init && driver->init(driver) < 0)
     {
-        LOG_ERR("Driver init failed: %s", driver->name);
         driver_count--;
+        osal_mutex_unlock(&s_devmgr_lock);
+        LOG_ERR("Driver init failed: %s", driver->name);
+
         return -1;
     }
 
+    osal_mutex_unlock(&s_devmgr_lock);
     LOG_INF("Registered driver: %s", driver->name);
 
     return 0;
@@ -296,6 +304,7 @@ int usbip_register_driver(struct usbip_device_driver* driver)
 
 void usbip_unregister_driver(struct usbip_device_driver* driver)
 {
+    osal_mutex_lock(&s_devmgr_lock);
     for (int i = 0; i < driver_count; i++)
     {
         if (driver_registry[i] == driver)
@@ -311,10 +320,13 @@ void usbip_unregister_driver(struct usbip_device_driver* driver)
                 driver_registry[j] = driver_registry[j + 1];
             }
             driver_count--;
+            osal_mutex_unlock(&s_devmgr_lock);
             LOG_DBG("Unregistered driver: %s", driver->name);
+
             return;
         }
     }
+    osal_mutex_unlock(&s_devmgr_lock);
 }
 
 /*****************************************************************************
