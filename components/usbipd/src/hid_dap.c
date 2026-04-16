@@ -497,10 +497,15 @@ static int vdap_handle_urb(struct usbip_device_driver* driver, const struct usbi
                         memcpy(*data_out, vdap.response, response_len);
                         *data_len = response_len;
                         urb_ret->u.ret_submit.actual_length = response_len;
+                        urb_ret->u.ret_submit.status = 0;
+                        vdap.response_pending = 0;
+                        vdap.response_valid = 0;
                     }
-                    urb_ret->u.ret_submit.status = 0;
-                    vdap.response_pending = 0;
-                    vdap.response_valid = 0;
+                    else
+                    {
+                        urb_ret->u.ret_submit.status = -ENOMEM;
+                        urb_ret->u.ret_submit.actual_length = 0;
+                    }
                 }
                 osal_mutex_unlock(&vdap.response_lock);
 
