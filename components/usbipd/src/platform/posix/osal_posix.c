@@ -195,6 +195,11 @@ static int posix_thread_join(void* handle)
     return ret == 0 ? OSAL_OK : OSAL_ERROR;
 }
 
+static int posix_thread_is_self(void* handle)
+{
+    return (pthread_self() == *(pthread_t*)handle) ? 1 : 0;
+}
+
 static int posix_thread_detach(void* handle)
 {
     int ret = pthread_detach(*(pthread_t*)handle);
@@ -251,6 +256,7 @@ static osal_ops_t posix_ops = {
     /* Thread */
     .thread_create = posix_thread_create,
     .thread_join = posix_thread_join,
+    .thread_is_self = posix_thread_is_self,
     .thread_detach = posix_thread_detach,
     .thread_delete = posix_thread_delete,
 

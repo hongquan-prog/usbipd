@@ -97,6 +97,7 @@ struct usbip_connection
     /* Connection state */
     enum usbip_conn_state state;
     struct osal_mutex state_lock;
+    atomic_int stop_in_progress;
 
     /* URB processing */
     struct usbip_conn_urb_queue urb_queue;

@@ -224,6 +224,18 @@ int osal_thread_join(struct osal_thread* thread)
     return ret;
 }
 
+int osal_thread_is_self(struct osal_thread* thread)
+{
+    const osal_ops_t* ops = osal_get_ops();
+
+    if (!ops || !ops->thread_is_self || !thread || !thread->handle)
+    {
+        return 0;
+    }
+
+    return ops->thread_is_self(thread->handle);
+}
+
 int osal_thread_detach(struct osal_thread* thread)
 {
     const osal_ops_t* ops = osal_get_ops();

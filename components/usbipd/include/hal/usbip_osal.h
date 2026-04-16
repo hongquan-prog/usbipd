@@ -56,6 +56,7 @@ struct osal_ops
     int (*thread_create)(void** handle, void* (*func)(void*), void* arg, size_t stack_size,
                          int priority);
     int (*thread_join)(void* handle);
+    int (*thread_is_self)(void* handle);
     int (*thread_detach)(void* handle);
     int (*thread_delete)(void* handle);
 
@@ -199,6 +200,7 @@ int osal_thread_create(struct osal_thread* thread, osal_thread_func func, void* 
  * Return: OSAL_OK on success, error code on failure
  */
 int osal_thread_join(struct osal_thread* thread);
+int osal_thread_is_self(struct osal_thread* thread);
 
 /**
  * osal_thread_detach - Detach thread

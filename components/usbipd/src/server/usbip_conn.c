@@ -287,6 +287,7 @@ struct usbip_connection* usbip_connection_create(struct usbip_conn_ctx* ctx)
     memset(conn, 0, sizeof(struct usbip_connection));
     conn->transport_ctx = ctx;
     conn->state = CONN_STATE_INIT;
+    atomic_init(&conn->stop_in_progress, 0);
 
     /* Initialize state lock */
     ret = osal_mutex_init(&conn->state_lock);
@@ -431,6 +432,7 @@ int usbip_connection_start(struct usbip_connection* conn, struct usbip_device_dr
  */
 void usbip_connection_stop(struct usbip_connection* conn)
 {
+    uint32_t start;
     int was_active;
 
     if (conn == NULL)
@@ -451,6 +453,30 @@ void usbip_connection_stop(struct usbip_connection* conn)
 
     if (!was_active)
     {
+        return;
+    }
+
+    /* Ensure stop sequence runs only once */
+    if (atomic_exchange_explicit(&conn->stop_in_progress, 1, memory_order_seq_cst) != 0)
+    {
+        /* Another thread is already tearing down. If we are the RX thread,
+         * return immediately so the other thread can join us. */
+        if (conn->rx_thread_started && osal_thread_is_self(&conn->rx_thread))
+        {
+            return;
+        }
+        /* Otherwise wait for stop to complete */
+        /* Fix: add timeout to prevent infinite blocking if state never reaches CLOSED. */
+        start = osal_get_time_ms();
+        while (conn->state != CONN_STATE_CLOSED)
+        {
+            if (osal_get_time_ms() - start > 5000)
+            {
+                LOG_ERR("Timeout waiting for connection stop on %s", conn->busid);
+                return;
+            }
+            osal_sleep_ms(10);
+        }
         return;
     }
 
@@ -479,7 +505,12 @@ void usbip_connection_stop(struct usbip_connection* conn)
     if (conn->rx_thread_started)
     {
         LOG_DBG("Waiting for RX thread to complete for %s", conn->busid);
-        osal_thread_join(&conn->rx_thread);
+        /* Fix: FreeRTOS eTaskGetState never returns eDeleted for the calling task.
+         * If we are the RX thread ourselves, skip join to avoid self-join deadlock. */
+        if (!osal_thread_is_self(&conn->rx_thread))
+        {
+            osal_thread_join(&conn->rx_thread);
+        }
         conn->rx_thread_started = 0;
     }
 
