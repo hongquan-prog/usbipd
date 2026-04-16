@@ -214,13 +214,25 @@ int hid_normalize_report_id(struct hid_device_ctx* ctx, const void* input, size_
 
 int hid_handle_out_report(struct hid_device_ctx* ctx, const void* data, size_t len)
 {
-    uint8_t buf[HID_DEFAULT_REPORT_SIZE];
+    size_t report_size;
+    uint8_t* buf;
     size_t out_len;
     uint8_t report_id;
     int ret;
 
+    /* Fix: allocate output buffer dynamically according to actual report_size
+     * instead of using a fixed-size stack array (HID_DEFAULT_REPORT_SIZE).
+     * This prevents stack overflow when report_size > 64 bytes. */
+    report_size = ctx->report_size ? ctx->report_size : HID_DEFAULT_REPORT_SIZE;
+    buf = osal_malloc(report_size);
+    if (!buf)
+    {
+        return -1;
+    }
+
     if (!ctx->ops || !ctx->ops->handle_data)
     {
+        osal_free(buf);
         return -1;
     }
 
@@ -228,11 +240,15 @@ int hid_handle_out_report(struct hid_device_ctx* ctx, const void* data, size_t l
     ret = hid_normalize_report_id(ctx, data, len, buf, &out_len, &report_id);
     if (ret < 0)
     {
+        osal_free(buf);
         return ret;
     }
 
     /* Call device-specific handler */
-    return ctx->ops->handle_data(report_id, buf, out_len, ctx->user_data);
+    ret = ctx->ops->handle_data(report_id, buf, out_len, ctx->user_data);
+    osal_free(buf);
+
+    return ret;
 }
 
 /**************************************************************************
