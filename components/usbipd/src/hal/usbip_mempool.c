@@ -16,6 +16,9 @@
 
 #include <stdint.h>
 #include "hal/usbip_osal.h"
+#include "hal/usbip_log.h"
+
+LOG_MODULE_REGISTER(mempool, CONFIG_USBIP_LOG_LEVEL);
 
 /*****************************************************************************
  * Static Memory Pool Implementation
@@ -92,13 +95,15 @@ void osal_mempool_free(struct osal_mempool* pool, void* ptr)
 
     if (offset % pool->block_size != 0)
     {
-        /* Not aligned to block boundary */
+        /* Not aligned to block boundary - caller passed an invalid pointer */
+        LOG_ERR("mempool_free: pointer %p not aligned to block boundary", ptr);
         return;
     }
 
     if (idx >= pool->block_count)
     {
-        /* Not in this pool */
+        /* Not in this pool - caller passed an out-of-range pointer */
+        LOG_ERR("mempool_free: pointer %p out of pool range", ptr);
         return;
     }
 
