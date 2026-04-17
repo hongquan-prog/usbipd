@@ -513,7 +513,14 @@ void usbip_set_device_busy(const char* busid)
         entry->busid[SYSFS_BUS_ID_SIZE - 1] = '\0';
         entry->state = DEV_STATE_EXPORTED;
         entry->owner = NULL;
-        dev_hash_insert(entry);
+        if (dev_hash_insert(entry) < 0)
+        {
+            dev_free_entry(entry);
+            osal_mutex_unlock(&s_devmgr_lock);
+            LOG_ERR("Failed to insert device %s", busid);
+
+            return;
+        }
     }
 
     osal_mutex_unlock(&s_devmgr_lock);

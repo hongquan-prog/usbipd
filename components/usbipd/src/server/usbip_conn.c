@@ -466,17 +466,14 @@ void usbip_connection_stop(struct usbip_connection* conn)
             return;
         }
         /* Otherwise wait for stop to complete */
-        /* Fix: add timeout to prevent infinite blocking if state never reaches CLOSED. */
-        start = osal_get_time_ms();
+        LOG_WRN("Connection stop already in progress, waiting for completion. busid=%s state=%d",
+                conn->busid, conn->state);
         while (conn->state != CONN_STATE_CLOSED)
         {
-            if (osal_get_time_ms() - start > 5000)
-            {
-                LOG_ERR("Timeout waiting for connection stop on %s", conn->busid);
-                return;
-            }
             osal_sleep_ms(10);
         }
+
+        LOG_INF("Connection stop completed. busid=%s", conn->busid);
         return;
     }
 
