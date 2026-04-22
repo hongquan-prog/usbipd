@@ -432,7 +432,6 @@ int usbip_connection_start(struct usbip_connection* conn, struct usbip_device_dr
  */
 void usbip_connection_stop(struct usbip_connection* conn)
 {
-    uint32_t start;
     int was_active;
 
     if (conn == NULL)
