@@ -609,6 +609,9 @@ static void* usbip_conn_rx_thread(void* arg)
 
     /* Auto-cleanup: stop and destroy connection when RX thread exits */
     usbip_connection_stop(conn);
+    usbip_connection_destroy(conn);
+    /* FreeRTOS threads cannot return directly, or the system will crash */
+    osal_thread_delete(&conn->rx_thread);
 
     return NULL;
 }
@@ -687,6 +690,8 @@ static void* usbip_conn_processor_thread(void* arg)
     atomic_store_explicit(&conn->running, 0, memory_order_seq_cst);
 
     LOG_INF("Processor thread exiting for %s", conn->busid);
+    /* FreeRTOS threads cannot return directly, or the system will crash */
+    osal_thread_delete(&conn->processor_thread);
 
     return NULL;
 }
