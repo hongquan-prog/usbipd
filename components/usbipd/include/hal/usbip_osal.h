@@ -53,12 +53,11 @@ struct osal_ops
     void (*cond_destroy)(void* handle);
 
     /* Thread */
-    int (*thread_create)(void** handle, void* (*func)(void*), void* arg, size_t stack_size,
+    int (*thread_create)(void** handle, const char *name, void* (*func)(void*), void* arg, size_t stack_size,
                          int priority);
     int (*thread_join)(void* handle);
     int (*thread_is_self)(void* handle);
     int (*thread_detach)(void* handle);
-    int (*thread_delete)(void* handle);
 
     /* Time */
     uint32_t (*get_time_ms)(void);
@@ -185,13 +184,14 @@ struct osal_thread
 /**
  * osal_thread_create - Create thread
  * @thread: Thread structure pointer
+ * @name: Thread name
  * @func: Thread entry function
  * @arg: Argument passed to thread
  * @stack_size: Stack size in bytes, 0 for default
  * @priority: Priority (0=default, positive=higher priority)
  * Return: OSAL_OK on success, error code on failure
  */
-int osal_thread_create(struct osal_thread* thread, osal_thread_func func, void* arg,
+int osal_thread_create(struct osal_thread* thread, const char *name, osal_thread_func func, void* arg,
                        size_t stack_size, int priority);
 
 /**
@@ -208,13 +208,6 @@ int osal_thread_is_self(struct osal_thread* thread);
  * Return: OSAL_OK on success, error code on failure
  */
 int osal_thread_detach(struct osal_thread* thread);
-
-/**
- * osal_thread_delete - Delete thread (for FreeRTOS vTaskDelete)
- * @thread: Thread structure pointer
- * Return: OSAL_OK on success, error code on failure
- */
-int osal_thread_delete(struct osal_thread* thread);
 
 /**
  * osal_get_time_ms - Get current time in milliseconds

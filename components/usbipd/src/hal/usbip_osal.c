@@ -193,7 +193,7 @@ void osal_cond_destroy(struct osal_cond* cond)
  * Thread Wrapper Functions
  *****************************************************************************/
 
-int osal_thread_create(struct osal_thread* thread, osal_thread_func func, void* arg,
+int osal_thread_create(struct osal_thread* thread, const char *name, osal_thread_func func, void* arg,
                        size_t stack_size, int priority)
 {
     const osal_ops_t* ops = osal_get_ops();
@@ -204,7 +204,7 @@ int osal_thread_create(struct osal_thread* thread, osal_thread_func func, void* 
     }
 
     thread->handle = NULL;
-    return ops->thread_create(&thread->handle, (void* (*)(void*))func, arg, stack_size, priority);
+    return ops->thread_create(&thread->handle, name, (void* (*)(void*))func, arg, stack_size, priority);
 }
 
 int osal_thread_join(struct osal_thread* thread)
@@ -251,18 +251,6 @@ int osal_thread_detach(struct osal_thread* thread)
         thread->handle = NULL;
     }
     return ret;
-}
-
-int osal_thread_delete(struct osal_thread* thread)
-{
-    const osal_ops_t* ops = osal_get_ops();
-
-    if (!ops || !ops->thread_delete || !thread || !thread->handle)
-    {
-        return OSAL_ERROR;
-    }
-
-    return ops->thread_delete(thread->handle);
 }
 
 /*****************************************************************************

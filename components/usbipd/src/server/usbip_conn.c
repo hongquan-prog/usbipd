@@ -387,7 +387,7 @@ int usbip_connection_start(struct usbip_connection* conn, struct usbip_device_dr
     atomic_store_explicit(&conn->running, 1, memory_order_seq_cst);
 
     /* Start processor thread first (waits on queue) */
-    ret = osal_thread_create(&conn->processor_thread, usbip_conn_processor_thread, conn,
+    ret = osal_thread_create(&conn->processor_thread, "Processor", usbip_conn_processor_thread, conn,
                              CONFIG_URB_THREAD_STACK_SIZE, CONFIG_URB_THREAD_PRIORITY);
     if (ret != OSAL_OK)
     {
@@ -399,7 +399,7 @@ int usbip_connection_start(struct usbip_connection* conn, struct usbip_device_dr
     conn->processor_started = 1;
 
     /* Start RX thread */
-    ret = osal_thread_create(&conn->rx_thread, usbip_conn_rx_thread, conn,
+    ret = osal_thread_create(&conn->rx_thread, "RX", usbip_conn_rx_thread, conn,
                              CONFIG_URB_THREAD_STACK_SIZE, CONFIG_URB_THREAD_PRIORITY);
     if (ret != OSAL_OK)
     {
@@ -494,6 +494,7 @@ void usbip_connection_stop(struct usbip_connection* conn)
     {
         LOG_DBG("Waiting for processor thread to complete for %s", conn->busid);
         osal_thread_join(&conn->processor_thread);
+        LOG_DBG("Processor thread completed for %s", conn->busid);
         conn->processor_started = 0;
     }
 
@@ -507,6 +508,7 @@ void usbip_connection_stop(struct usbip_connection* conn)
         {
             osal_thread_join(&conn->rx_thread);
         }
+        LOG_DBG("RX thread completed for %s", conn->busid);
         conn->rx_thread_started = 0;
     }
 
@@ -607,10 +609,7 @@ static void* usbip_conn_rx_thread(void* arg)
     LOG_DBG("RX thread exiting for %s", conn->busid);
 
     /* Auto-cleanup: stop and destroy connection when RX thread exits */
-    usbip_connection_stop(conn);
     usbip_connection_destroy(conn);
-    /* FreeRTOS threads cannot return directly, or the system will crash */
-    osal_thread_delete(&conn->rx_thread);
 
     return NULL;
 }
@@ -687,10 +686,7 @@ static void* usbip_conn_processor_thread(void* arg)
 
     /* Signal RX thread to stop if not already stopping */
     atomic_store_explicit(&conn->running, 0, memory_order_seq_cst);
-
     LOG_INF("Processor thread exiting for %s", conn->busid);
-    /* FreeRTOS threads cannot return directly, or the system will crash */
-    osal_thread_delete(&conn->processor_thread);
 
     return NULL;
 }

@@ -21,6 +21,7 @@
 #define USBIP_LOG_H
 
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <time.h>
 
@@ -81,95 +82,29 @@ extern "C" {
 #define LOG_MODULE_LEVEL _log_module_level
 
 /*****************************************************************************
- * Log output function (inline implementation)
+ * Log initialization
  *****************************************************************************/
 
-static inline void usbip_log_printf(int level, const char* tag, const unsigned char* data,
-                                    unsigned int len, const char* fmt, ...)
-{
-    va_list args;
-    time_t now;
-    struct tm tm_info;
-    struct timespec ts;
-    char time_buf[16];
-    const char* level_str;
-    const char* level_color;
-    FILE* fp;
+/**
+ * usbip_log_init - Initialize log system
+ * Return: 0 on success, negative error code on failure
+ */
+int usbip_log_init(void);
 
-    /* Get time */
-    clock_gettime(CLOCK_REALTIME, &ts);
-    now = ts.tv_sec;
-    localtime_r(&now, &tm_info);
+/*****************************************************************************
+ * Log output function declaration
+ *****************************************************************************/
 
-    /* Format timestamp: HH:MM:SS.mmm */
-    strftime(time_buf, sizeof(time_buf), "%H:%M:%S", &tm_info);
-
-    /* Level string and color */
-    switch (level)
-    {
-        case LOG_LEVEL_ERR:
-            level_str = "ERR";
-            level_color = LOG_COLOR_RED;
-            fp = stderr;
-            break;
-        case LOG_LEVEL_WRN:
-            level_str = "WRN";
-            level_color = LOG_COLOR_YELLOW;
-            fp = stderr;
-            break;
-        case LOG_LEVEL_INF:
-            level_str = "INF";
-            level_color = LOG_COLOR_GREEN;
-            fp = stdout;
-            break;
-        case LOG_LEVEL_DBG:
-            level_str = "DBG";
-            level_color = LOG_COLOR_NONE;
-            fp = stdout;
-            break;
-        default:
-            level_str = "???";
-            level_color = LOG_COLOR_NONE;
-            fp = stdout;
-            break;
-    }
-
-    /* Output format: [color]HH:MM:SS.mmm [L] [tag] message */
-    if (LOG_USE_COLOR)
-    {
-        fprintf(fp, "%s%s.%03ld %s [%s] ", level_color, time_buf, ts.tv_nsec / 1000000, tag,
-                level_str);
-    }
-    else
-    {
-        fprintf(fp, "%s.%03ld %s [%s] ", time_buf, ts.tv_nsec / 1000000, tag, level_str);
-    }
-
-    va_start(args, fmt);
-    vfprintf(fp, fmt, args);
-    va_end(args);
-
-    /* Output hex data (if any) */
-    if (data && len > 0)
-    {
-        for (unsigned int i = 0; i < len; i++)
-        {
-            if ((i % 16) == 0)
-            {
-                fprintf(fp, "\n");
-            }
-
-            fprintf(fp, "%02X ", data[i]);
-        }
-    }
-
-    fprintf(fp, "\n");
-    if (LOG_USE_COLOR)
-    {
-        fprintf(fp, LOG_COLOR_NONE);
-    }
-    fflush(fp);
-}
+/**
+ * usbip_log_printf - Print log message
+ * @level: Log level (LOG_LEVEL_ERR, LOG_LEVEL_WRN, LOG_LEVEL_INF, LOG_LEVEL_DBG)
+ * @tag: Module tag string
+ * @data: Optional hex data pointer (can be NULL)
+ * @len: Length of hex data (0 if no data)
+ * @fmt: Printf-style format string
+ */
+void usbip_log_printf(int level, const char* tag, const unsigned char* data, uint32_t len,
+                      const char* fmt, ...);    
 
 /*****************************************************************************
  * Log macros

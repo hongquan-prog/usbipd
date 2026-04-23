@@ -12,6 +12,7 @@ extern void dap_lock_init(void);
 void usbipd_init(uint16_t port)
 {
     default_os_register();
+    usbip_log_init();
     dap_lock_init();
     hid_dap_driver_register();
     bulk_dap_driver_register();

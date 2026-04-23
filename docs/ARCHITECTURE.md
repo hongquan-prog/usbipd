@@ -326,7 +326,7 @@ typedef struct osal_ops {
     void (*cond_destroy)(void* handle);
 
     /* 线程 */
-    int (*thread_create)(void* handle, void* (*func)(void*), void* arg, size_t stack_size, int priority);
+    int (*thread_create)(void* handle, const char* name, void* (*func)(void*), void* arg, size_t stack_size, int priority);
     int (*thread_join)(void* handle);
     int (*thread_detach)(void* handle);
 

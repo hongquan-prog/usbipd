@@ -18,6 +18,8 @@
 #error "POSIX OSAL implementation can only be compiled on Unix-like systems"
 #endif
 
+#define _GNU_SOURCE
+
 #include <errno.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -151,30 +153,36 @@ static void posix_cond_destroy(void* handle)
  * POSIX Thread Implementation
  *****************************************************************************/
 
-static int posix_thread_create(void** handle, void* (*func)(void*), void* arg, size_t stack_size,
+static int posix_thread_create(void** handle, const char *name, void* (*func)(void*), void* arg, size_t stack_size,
                                int priority)
 {
+    int ret;
     pthread_attr_t attr;
-    pthread_attr_init(&attr);
+    pthread_t* pt = NULL;
 
+    /* Priority is handled via scheduling policy in POSIX, ignore here */
+    (void)priority;
+
+    pthread_attr_init(&attr);
     if (stack_size > 0)
     {
         pthread_attr_setstacksize(&attr, stack_size);
     }
 
-    /* Priority is handled via scheduling policy in POSIX, ignore here */
-    (void)priority;
-
-    pthread_t* pt = malloc(sizeof(pthread_t));
+    pt = malloc(sizeof(pthread_t));
     if (!pt)
     {
         pthread_attr_destroy(&attr);
         return OSAL_ERROR;
     }
 
-    int ret = pthread_create(pt, &attr, func, arg);
-    pthread_attr_destroy(&attr);
+    ret = pthread_create(pt, &attr, func, arg);
+    if (name)
+    {
+        pthread_setname_np(*pt, name);
+    }
 
+    pthread_attr_destroy(&attr);
     if (ret != 0)
     {
         free(pt);
@@ -208,13 +216,6 @@ static int posix_thread_detach(void* handle)
         free(handle);
     }
     return ret == 0 ? OSAL_OK : OSAL_ERROR;
-}
-
-static int posix_thread_delete(void* handle)
-{
-    /* POSIX threads don't need explicit deletion */
-    (void)handle;
-    return OSAL_OK;
 }
 
 /*****************************************************************************
@@ -258,7 +259,6 @@ static osal_ops_t posix_ops = {
     .thread_join = posix_thread_join,
     .thread_is_self = posix_thread_is_self,
     .thread_detach = posix_thread_detach,
-    .thread_delete = posix_thread_delete,
 
     /* Time */
     .get_time_ms = posix_get_time_ms,
