@@ -25,7 +25,6 @@
 #include "usbip_conn.h"
 #include "usbip_devmgr.h"
 #include "usbip_pack.h"
-#include "usbip_server.h"
 #include "usbip_urb.h"
 
 LOG_MODULE_REGISTER(conn, CONFIG_USBIP_LOG_LEVEL);
