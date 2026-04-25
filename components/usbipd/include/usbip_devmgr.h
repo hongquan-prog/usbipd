@@ -175,6 +175,82 @@ struct usbip_device_driver* usbip_get_first_driver(void);
 struct usbip_device_driver* usbip_get_next_driver(struct usbip_device_driver* current);
 
 /*****************************************************************************
+ * Device Query Interface (Wrapper Functions)
+ * These wrap driver function pointers for better readability and error handling
+ *****************************************************************************/
+
+/**
+ * usbip_driver_get_device_count - Get number of devices from driver
+ * @driver: Driver instance
+ * Return: Device count, 0 if error or no devices
+ */
+int usbip_driver_get_device_count(struct usbip_device_driver* driver);
+
+/**
+ * usbip_driver_get_device_by_index - Get device by index
+ * @driver: Driver instance
+ * @index: Device index (0 to get_device_count()-1)
+ * @device: Output device info
+ * Return: 0 on success, -1 if index invalid
+ */
+int usbip_driver_get_device_by_index(struct usbip_device_driver* driver, int index,
+                                    struct usbip_usb_device* device);
+
+/**
+ * usbip_driver_get_interface - Get interface info for device
+ * @driver: Driver instance
+ * @index: Device index
+ * @iface: Output interface info
+ * Return: 0 on success, -1 if index invalid
+ */
+int usbip_driver_get_interface(struct usbip_device_driver* driver, int index,
+                               struct usbip_usb_interface* iface);
+
+/**
+ * usbip_driver_get_device - Get device by busid
+ * @driver: Driver instance
+ * @busid: Device bus ID
+ * Return: Device pointer, NULL if not found
+ */
+const struct usbip_usb_device* usbip_driver_get_device(struct usbip_device_driver* driver,
+                                                       const char* busid);
+
+/**
+ * usbip_driver_export_device - Export device to remote client
+ * @driver: Driver instance
+ * @busid: Device bus ID
+ * @conn: Connection context
+ * Return: 0 on success, negative on failure
+ */
+int usbip_driver_export_device(struct usbip_device_driver* driver, const char* busid,
+                               struct usbip_connection* conn);
+
+/**
+ * usbip_driver_unexport_device - Unexport device
+ * @driver: Driver instance
+ * @busid: Device bus ID
+ * Return: 0 on success, negative on failure
+ */
+int usbip_driver_unexport_device(struct usbip_device_driver* driver, const char* busid);
+
+/**
+ * usbip_driver_handle_urb - Handle a URB request
+ * @driver: Driver instance
+ * @urb_cmd: Input, URB command header
+ * @urb_ret: Output, URB return header
+ * @data_out: Output, data buffer pointer (driver allocates, framework frees)
+ * @data_len: Output, data length
+ * @urb_data: Input, URB additional data (valid for OUT transfers)
+ * @urb_data_len: Input, URB additional data length
+ * Return: 0 continue, >0 need to send response, <0 error disconnect
+ */
+int usbip_driver_handle_urb(struct usbip_device_driver* driver,
+                           const struct usbip_header* urb_cmd,
+                           struct usbip_header* urb_ret,
+                           void** data_out, size_t* data_len,
+                           const void* urb_data, size_t urb_data_len);
+
+/*****************************************************************************
  * Device Status Management
  *****************************************************************************/
 

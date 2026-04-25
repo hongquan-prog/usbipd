@@ -106,7 +106,7 @@ static int usbip_server_handle_devlist(struct usbip_conn_ctx* ctx)
     /* Count total devices from all drivers */
     for (driver = usbip_get_first_driver(); driver != NULL; driver = usbip_get_next_driver(driver))
     {
-        device_count += driver->get_device_count(driver);
+        device_count += usbip_driver_get_device_count(driver);
     }
 
     /* Send device count */
@@ -123,11 +123,11 @@ static int usbip_server_handle_devlist(struct usbip_conn_ctx* ctx)
     /* Send each device from all drivers */
     for (driver = usbip_get_first_driver(); driver != NULL; driver = usbip_get_next_driver(driver))
     {
-        int drv_count = driver->get_device_count(driver);
+        int drv_count = usbip_driver_get_device_count(driver);
 
         for (drv_idx = 0; drv_idx < drv_count; drv_idx++)
         {
-            if (driver->get_device_by_index(driver, drv_idx, &udev) < 0)
+            if (usbip_driver_get_device_by_index(driver, drv_idx, &udev) < 0)
             {
                 continue;
             }
@@ -142,11 +142,7 @@ static int usbip_server_handle_devlist(struct usbip_conn_ctx* ctx)
 
             /* Send interface information */
             memset(&iface, 0, sizeof(iface));
-            if (driver->get_interface)
-            {
-                driver->get_interface(driver, drv_idx, &iface);
-            }
-            else
+            if (usbip_driver_get_interface(driver, drv_idx, &iface) < 0)
             {
                 LOG_WRN("Driver %s does not implement get_interface, using HID fallback",
                         driver->name);
@@ -211,7 +207,7 @@ static int usbip_server_handle_import_req(struct usbip_conn_ctx* ctx)
     for (driver = usbip_get_first_driver(); driver != NULL && !found;
          driver = usbip_get_next_driver(driver))
     {
-        found_dev = driver->get_device(driver, busid);
+        found_dev = usbip_driver_get_device(driver, busid);
         if (found_dev)
         {
             found = 1;
@@ -276,7 +272,7 @@ static int usbip_server_handle_import_req(struct usbip_conn_ctx* ctx)
     }
 
     /* Export device via driver */
-    if (driver->export_device(driver, busid, conn) < 0)
+    if (usbip_driver_export_device(driver, busid, conn) < 0)
     {
         LOG_ERR("Failed to export device: %s", busid);
         usbip_unbind_device(busid);
@@ -289,7 +285,7 @@ static int usbip_server_handle_import_req(struct usbip_conn_ctx* ctx)
     if (usbip_connection_start(conn, driver, busid) < 0)
     {
         LOG_ERR("Failed to start connection for device: %s", busid);
-        driver->unexport_device(driver, busid);
+        usbip_driver_unexport_device(driver, busid);
         usbip_unbind_device(busid);
         usbip_conn_manager_remove(conn);
         usbip_connection_destroy(conn);

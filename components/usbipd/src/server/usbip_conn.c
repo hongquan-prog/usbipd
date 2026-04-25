@@ -518,7 +518,7 @@ void usbip_connection_stop(struct usbip_connection* conn)
     if (conn->driver && conn->busid[0] != '\0')
     {
         LOG_DBG("Unexporting device %s", conn->busid);
-        conn->driver->unexport_device(conn->driver, conn->busid);
+        usbip_driver_unexport_device(conn->driver, conn->busid);
         usbip_unbind_device(conn->busid);
     }
 
@@ -686,7 +686,7 @@ static void* usbip_conn_processor_thread(void* arg)
 
         data_out = NULL;
         data_len = 0;
-        ret = conn->driver->handle_urb(conn->driver, &urb_cmd, &urb_ret, &data_out, &data_len,
+        ret = usbip_driver_handle_urb(conn->driver, &urb_cmd, &urb_ret, &data_out, &data_len,
                                        urb_data, urb_data_len);
 
         if (ret < 0)

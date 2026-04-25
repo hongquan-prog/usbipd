@@ -326,6 +326,7 @@ void usbip_unregister_driver(struct usbip_device_driver* driver)
             return;
         }
     }
+
     osal_mutex_unlock(&s_devmgr_lock);
 }
 
@@ -339,6 +340,7 @@ struct usbip_device_driver* usbip_get_first_driver(void)
     {
         return NULL;
     }
+
     return driver_registry[0];
 }
 
@@ -351,7 +353,102 @@ struct usbip_device_driver* usbip_get_next_driver(struct usbip_device_driver* cu
             return driver_registry[i + 1];
         }
     }
+
     return NULL;
+}
+
+/*****************************************************************************
+ * Device Query Interface (Wrapper Functions)
+ *****************************************************************************/
+
+int usbip_driver_get_device_count(struct usbip_device_driver* driver)
+{
+    if (driver == NULL || driver->get_device_count == NULL)
+    {
+        return 0;
+    }
+
+    return driver->get_device_count(driver);
+}
+
+int usbip_driver_get_device_by_index(struct usbip_device_driver* driver, int index,
+                                    struct usbip_usb_device* device)
+{
+    if (driver == NULL || driver->get_device_by_index == NULL || device == NULL)
+    {
+        return -1;
+    }
+
+    return driver->get_device_by_index(driver, index, device);
+}
+
+int usbip_driver_get_interface(struct usbip_device_driver* driver, int index,
+                               struct usbip_usb_interface* iface)
+{
+    if (driver == NULL || iface == NULL)
+    {
+        return -1;
+    }
+
+    if (driver->get_interface != NULL)
+    {
+        return driver->get_interface(driver, index, iface);
+    }
+
+    /* Fallback for drivers without get_interface */
+    memset(iface, 0, sizeof(*iface));
+    iface->bInterfaceClass = 0x03;
+    iface->bInterfaceSubClass = 0x01;
+    iface->bInterfaceProtocol = 0x01;
+
+    return 0;
+}
+
+const struct usbip_usb_device* usbip_driver_get_device(struct usbip_device_driver* driver,
+                                                       const char* busid)
+{
+    if (driver == NULL || driver->get_device == NULL || busid == NULL)
+    {
+        return NULL;
+    }
+
+    return driver->get_device(driver, busid);
+}
+
+int usbip_driver_export_device(struct usbip_device_driver* driver, const char* busid,
+                               struct usbip_connection* conn)
+{
+    if (driver == NULL || driver->export_device == NULL || busid == NULL || conn == NULL)
+    {
+        return -1;
+    }
+
+    return driver->export_device(driver, busid, conn);
+}
+
+int usbip_driver_unexport_device(struct usbip_device_driver* driver, const char* busid)
+{
+    if (driver == NULL || driver->unexport_device == NULL || busid == NULL)
+    {
+        return -1;
+    }
+
+    return driver->unexport_device(driver, busid);
+}
+
+int usbip_driver_handle_urb(struct usbip_device_driver* driver,
+                           const struct usbip_header* urb_cmd,
+                           struct usbip_header* urb_ret,
+                           void** data_out, size_t* data_len,
+                           const void* urb_data, size_t urb_data_len)
+{
+    if (driver == NULL || driver->handle_urb == NULL)
+    {
+        return -1;
+    }
+
+    return driver->handle_urb(driver, urb_cmd, urb_ret, data_out, data_len,
+                              urb_data, urb_data_len);
 }
 
 /*****************************************************************************
