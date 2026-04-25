@@ -26,9 +26,9 @@
 #include "usbip_common.h"
 #include "usbip_control.h"
 #include "usbip_hid.h"
+#include "usbip_devmgr.h"
 
 LOG_MODULE_REGISTER(dap, CONFIG_DAP_LOG_LEVEL);
-int usbip_register_driver(struct usbip_device_driver* driver);
 
 /**************************************************************************
  * Global DAP Lock - Protects shared DAP_Data used by DAP_ProcessCommand

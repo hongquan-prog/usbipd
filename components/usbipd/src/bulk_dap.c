@@ -26,9 +26,9 @@
 #include "hal/usbip_osal.h"
 #include "usbip_common.h"
 #include "usbip_control.h"
+#include "usbip_devmgr.h"
 
 LOG_MODULE_REGISTER(dap_v2, CONFIG_DAP_LOG_LEVEL);
-int usbip_register_driver(struct usbip_device_driver* driver);
 
 /**************************************************************************
  * External DAP Lock Wrapper - Defined in hid_dap.c
