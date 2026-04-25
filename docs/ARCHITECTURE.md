@@ -246,7 +246,7 @@ struct usbip_device_driver {
 **管理接口**:
 - `usbip_register_driver()` - 注册驱动
 - `usbip_unregister_driver()` - 注销驱动
-- `usbip_get_first_driver()` / `usbip_get_next_driver()` - 驱动迭代
+- `usbip_devmgr_begin()` / `usbip_devmgr_next()` - 驱动迭代
 - `usbip_bind_device()` / `usbip_unbind_device()` - 设备与连接绑定/解绑
 - `usbip_is_device_available()` / `usbip_get_device_owner()` - 设备状态查询
 

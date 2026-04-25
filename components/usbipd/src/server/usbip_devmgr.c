@@ -355,7 +355,7 @@ void usbip_unregister_driver(struct usbip_device_driver* driver)
  * Driver Iteration Interface
  *****************************************************************************/
 
-struct usbip_device_driver* usbip_get_first_driver(void)
+struct usbip_device_driver* usbip_devmgr_begin(void)
 {
     if (DEVMGR()->driver_count == 0)
     {
@@ -365,7 +365,7 @@ struct usbip_device_driver* usbip_get_first_driver(void)
     return DEVMGR()->drivers[0];
 }
 
-struct usbip_device_driver* usbip_get_next_driver(struct usbip_device_driver* current)
+struct usbip_device_driver* usbip_devmgr_next(struct usbip_device_driver* current)
 {
     for (int i = 0; i < DEVMGR()->driver_count - 1; i++)
     {
@@ -444,7 +444,13 @@ int usbip_driver_export_device(struct usbip_device_driver* driver, const char* b
         return -1;
     }
 
-    return driver->export_device(driver, busid, conn);
+    if (0 == driver->export_device(driver, busid, conn))
+    {
+        usbip_set_device_busy(busid);
+        return 0;
+    }
+    
+    return -1;
 }
 
 int usbip_driver_unexport_device(struct usbip_device_driver* driver, const char* busid)
@@ -454,7 +460,13 @@ int usbip_driver_unexport_device(struct usbip_device_driver* driver, const char*
         return -1;
     }
 
-    return driver->unexport_device(driver, busid);
+    if (0 == driver->unexport_device(driver, busid))
+    {
+        usbip_set_device_available(busid);
+        return 0;
+    }
+    
+    return -1;
 }
 
 int usbip_driver_handle_urb(struct usbip_device_driver* driver,

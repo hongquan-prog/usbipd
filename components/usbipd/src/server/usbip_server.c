@@ -95,6 +95,7 @@ static int usbip_server_handle_devlist(struct usbip_conn_ctx* ctx)
     uint32_t reply_count;
     int device_count = 0;
     int drv_idx;
+    int drv_count = 0;
 
     /* Send operation header */
     if (usbip_send_op_common(ctx, OP_REP_DEVLIST, ST_OK) < 0)
@@ -103,10 +104,23 @@ static int usbip_server_handle_devlist(struct usbip_conn_ctx* ctx)
         return -1;
     }
 
-    /* Count total devices from all drivers */
-    for (driver = usbip_get_first_driver(); driver != NULL; driver = usbip_get_next_driver(driver))
+    /* Count available (not busy) devices from all drivers */
+    for (driver = usbip_devmgr_begin(); driver != NULL; driver = usbip_devmgr_next(driver))
     {
-        device_count += usbip_driver_get_device_count(driver);
+        drv_count = usbip_driver_get_device_count(driver);
+        for (drv_idx = 0; drv_idx < drv_count; drv_idx++)
+        {
+            if (usbip_driver_get_device_by_index(driver, drv_idx, &udev) < 0)
+            {
+                continue;
+            }
+
+            if (!usbip_is_device_available(udev.busid))
+            {
+                continue;
+            }
+            device_count++;
+        }
     }
 
     /* Send device count */
@@ -120,14 +134,19 @@ static int usbip_server_handle_devlist(struct usbip_conn_ctx* ctx)
 
     LOG_DBG("Sending %d device(s)", device_count);
 
-    /* Send each device from all drivers */
-    for (driver = usbip_get_first_driver(); driver != NULL; driver = usbip_get_next_driver(driver))
+    /* Send each available device from all drivers */
+    for (driver = usbip_devmgr_begin(); driver != NULL; driver = usbip_devmgr_next(driver))
     {
-        int drv_count = usbip_driver_get_device_count(driver);
-
+        drv_count = usbip_driver_get_device_count(driver);
         for (drv_idx = 0; drv_idx < drv_count; drv_idx++)
         {
             if (usbip_driver_get_device_by_index(driver, drv_idx, &udev) < 0)
+            {
+                continue;
+            }
+
+            /* Filter out already-exported devices */
+            if (!usbip_is_device_available(udev.busid))
             {
                 continue;
             }
@@ -204,8 +223,8 @@ static int usbip_server_handle_import_req(struct usbip_conn_ctx* ctx)
     }
 
     /* Find device */
-    for (driver = usbip_get_first_driver(); driver != NULL && !found;
-         driver = usbip_get_next_driver(driver))
+    for (driver = usbip_devmgr_begin(); driver != NULL && !found;
+         driver = usbip_devmgr_next(driver))
     {
         found_dev = usbip_driver_get_device(driver, busid);
         if (found_dev)

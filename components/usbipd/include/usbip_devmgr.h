@@ -162,17 +162,17 @@ void usbip_unregister_driver(struct usbip_device_driver* driver);
  *****************************************************************************/
 
 /**
- * usbip_get_first_driver - Get first registered driver
+ * usbip_devmgr_begin - Get first registered driver
  * Return: Driver pointer, NULL if no drivers
  */
-struct usbip_device_driver* usbip_get_first_driver(void);
+struct usbip_device_driver* usbip_devmgr_begin(void);
 
 /**
- * usbip_get_next_driver - Get next driver
+ * usbip_devmgr_next - Get next driver
  * @current: Current driver
  * Return: Next driver pointer, NULL if no more drivers
  */
-struct usbip_device_driver* usbip_get_next_driver(struct usbip_device_driver* current);
+struct usbip_device_driver* usbip_devmgr_next(struct usbip_device_driver* current);
 
 /*****************************************************************************
  * Device Query Interface (Wrapper Functions)

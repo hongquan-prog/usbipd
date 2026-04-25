@@ -25,10 +25,10 @@
 #include "hal/usbip_osal.h"
 #include "usbip_common.h"
 #include "usbip_control.h"
-#include "usbip_devmgr.h"
 #include "usbip_hid.h"
 
 LOG_MODULE_REGISTER(dap, CONFIG_DAP_LOG_LEVEL);
+int usbip_register_driver(struct usbip_device_driver* driver);
 
 /**************************************************************************
  * Global DAP Lock - Protects shared DAP_Data used by DAP_ProcessCommand
@@ -553,7 +553,7 @@ static int vdap_get_device_count(struct usbip_device_driver* driver)
 {
     (void)driver;
 
-    if (vdap.udev.busid[0] == '\0' || usbip_is_device_busy(vdap.udev.busid))
+    if (vdap.udev.busid[0] == '\0')
     {
         return 0;
     }
@@ -565,8 +565,7 @@ static int vdap_get_device_by_index(struct usbip_device_driver* driver, int inde
                                     struct usbip_usb_device* device)
 {
     (void)driver;
-
-    if (index != 0 || vdap.udev.busid[0] == '\0' || usbip_is_device_busy(vdap.udev.busid))
+    if (index != 0 || vdap.udev.busid[0] == '\0')
     {
         return -1;
     }
@@ -618,7 +617,6 @@ static int vdap_export_device(struct usbip_device_driver* driver, const char* bu
 
     vdap.exported = 1;
     vdap.conn = conn;
-    usbip_set_device_busy(busid);
 
     LOG_INF("Exported: %s", busid);
     return 0;
@@ -635,7 +633,6 @@ static int vdap_unexport_device(struct usbip_device_driver* driver, const char* 
 
     vdap.exported = 0;
     vdap.conn = NULL;
-    usbip_set_device_available(busid);
 
     LOG_INF("Unexported: %s", busid);
     return 0;
