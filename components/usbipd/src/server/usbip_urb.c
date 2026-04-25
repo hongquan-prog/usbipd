@@ -21,7 +21,6 @@
 
 #include "hal/usbip_log.h"
 #include "hal/usbip_osal.h"
-#include "hal/usbip_transport.h"
 #include "usbip_conn.h"
 #include "usbip_pack.h"
 
@@ -276,49 +275,4 @@ void usbip_urb_queue_close(struct usbip_conn_urb_queue* q)
     osal_cond_broadcast(&queue->not_empty);
     osal_cond_broadcast(&queue->not_full);
     osal_mutex_unlock(&queue->lock);
-}
-
-/*****************************************************************************
- * URB Response Sending
- *****************************************************************************/
-
-/**
- * usbip_urb_send_reply - Send URB response to client
- * @ctx: Connection context
- * @urb_ret: URB return header
- * @data: Response data
- * @data_len: Data length
- *
- * Return: 0 on success, -1 on failure
- */
-int usbip_urb_send_reply(struct usbip_conn_ctx* ctx, struct usbip_header* urb_ret, const void* data,
-                         size_t data_len)
-{
-    ssize_t n;
-
-    LOG_DBG("Sending URB reply: cmd=%u seq=%u devid=%u dir=%u ep=%u status=%d len=%d",
-            urb_ret->base.command, urb_ret->base.seqnum, urb_ret->base.devid,
-            urb_ret->base.direction, urb_ret->base.ep, urb_ret->u.ret_submit.status,
-            urb_ret->u.ret_submit.actual_length);
-
-    usbip_pack_header(urb_ret, 1);
-
-    n = transport_send(ctx, urb_ret, sizeof(*urb_ret));
-    if (n != sizeof(*urb_ret))
-    {
-        LOG_ERR("send header failed");
-        return -1;
-    }
-
-    if (data && data_len > 0)
-    {
-        n = transport_send(ctx, data, data_len);
-        if (n != (ssize_t)data_len)
-        {
-            LOG_ERR("send data failed");
-            return -1;
-        }
-    }
-
-    return sizeof(*urb_ret) + data_len;
 }

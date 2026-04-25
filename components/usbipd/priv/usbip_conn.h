@@ -177,6 +177,21 @@ int usbip_connection_start(struct usbip_connection* conn, struct usbip_device_dr
  */
 void usbip_connection_stop(struct usbip_connection* conn);
 
+/*****************************************************************************
+ * URB Reply Interface
+ *****************************************************************************/
+
+/**
+ * usbip_connection_send_reply - Send URB response to client
+ * @conn: Connection instance
+ * @urb_ret: URB return header
+ * @data: Response data (can be NULL)
+ * @data_len: Data length
+ * Return: Bytes sent on success, negative on failure
+ */
+int usbip_connection_send_reply(struct usbip_connection* conn, struct usbip_header* urb_ret,
+                                const void* data, size_t data_len);
+
 #ifdef __cplusplus
 }
 #endif

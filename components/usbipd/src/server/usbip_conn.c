@@ -530,6 +530,47 @@ void usbip_connection_stop(struct usbip_connection* conn)
     LOG_INF("Connection stopped for device %s", conn->busid);
 }
 
+/*****************************************************************************
+ * URB Reply Interface
+ *****************************************************************************/
+
+int usbip_connection_send_reply(struct usbip_connection* conn, struct usbip_header* urb_ret,
+                                const void* data, size_t data_len)
+{
+    ssize_t n;
+
+    if (conn == NULL || conn->transport_ctx == NULL || urb_ret == NULL)
+    {
+        return -1;
+    }
+
+    LOG_DBG("Sending URB reply: cmd=%u seq=%u devid=%u dir=%u ep=%u status=%d len=%d",
+            urb_ret->base.command, urb_ret->base.seqnum, urb_ret->base.devid,
+            urb_ret->base.direction, urb_ret->base.ep, urb_ret->u.ret_submit.status,
+            urb_ret->u.ret_submit.actual_length);
+
+    usbip_pack_header(urb_ret, 1);
+
+    n = transport_send(conn->transport_ctx, urb_ret, sizeof(*urb_ret));
+    if (n != sizeof(*urb_ret))
+    {
+        LOG_ERR("send header failed");
+        return -1;
+    }
+
+    if (data && data_len > 0)
+    {
+        n = transport_send(conn->transport_ctx, data, data_len);
+        if (n != (ssize_t)data_len)
+        {
+            LOG_ERR("send data failed");
+            return -1;
+        }
+    }
+
+    return (int)(sizeof(*urb_ret) + data_len);
+}
+
 static int usbip_recv_header(struct usbip_conn_ctx* ctx, struct usbip_header* hdr)
 {
     ssize_t n;
@@ -666,7 +707,7 @@ static void* usbip_conn_processor_thread(void* arg)
         /* Send reply for IN transfers or when driver indicates response needed */
         if (ret > 0 || urb_cmd.base.direction == USBIP_DIR_OUT)
         {
-            if (usbip_urb_send_reply(conn->transport_ctx, &urb_ret, data_out, data_len) < 0)
+            if (usbip_connection_send_reply(conn, &urb_ret, data_out, data_len) < 0)
             {
                 LOG_ERR("Processor: Failed to send URB reply for %s", conn->busid);
                 osal_free(data_out);

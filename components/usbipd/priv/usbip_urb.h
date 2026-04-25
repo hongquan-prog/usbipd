@@ -11,7 +11,6 @@
 #ifndef USBIP_URB_H
 #define USBIP_URB_H
 
-#include "hal/usbip_transport.h"
 #include "usbip_common.h"
 
 #ifdef __cplusplus
@@ -62,17 +61,6 @@ int usbip_urb_queue_pop(struct usbip_conn_urb_queue* q, struct usbip_header* hea
  * @q: Queue
  */
 void usbip_urb_queue_close(struct usbip_conn_urb_queue* q);
-
-/**
- * usbip_urb_send_reply - Send URB response to client
- * @ctx: Connection context
- * @urb_ret: URB return header
- * @data: Response data
- * @data_len: Data length
- * Return: 0 on success, -1 on failure
- */
-int usbip_urb_send_reply(struct usbip_conn_ctx* ctx, struct usbip_header* urb_ret, const void* data,
-                         size_t data_len);
 
 #ifdef __cplusplus
 }
