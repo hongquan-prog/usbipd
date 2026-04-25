@@ -40,8 +40,7 @@ struct usbip_connection;
 #endif
 #define MAX_DRIVERS CONFIG_USBIP_MAX_DRIVERS
 
-static struct usbip_device_driver* driver_registry[MAX_DRIVERS];
-static int driver_count = 0;
+
 
 /*****************************************************************************
  * Device State Enumeration
@@ -76,10 +75,32 @@ struct device_registry_entry
     struct device_registry_entry* next;  /* Hash chain */
 };
 
-static struct device_registry_entry device_registry[MAX_BUSY_DEVICES];
-static struct device_registry_entry* hash_table[DEV_HASH_TABLE_SIZE];
-static int device_count = 0;
-static struct osal_mutex s_devmgr_lock;
+/*****************************************************************************
+ * Device Manager Instance
+ *****************************************************************************/
+
+/**
+ * struct usbip_devmgr - Device manager instance
+ *
+ * Encapsulates all device management state including driver registry,
+ * device registry hash table, and synchronization.
+ */
+static struct
+{
+    /* Driver Registry */
+    struct usbip_device_driver* drivers[MAX_DRIVERS];
+    int driver_count;
+
+    /* Device Registry */
+    struct device_registry_entry device_entries[MAX_BUSY_DEVICES];
+    struct device_registry_entry* hash_table[DEV_HASH_TABLE_SIZE];
+    int device_count;
+
+    /* Synchronization */
+    struct osal_mutex lock;
+} g_devmgr = {0};
+
+#define DEVMGR() (&g_devmgr)
 
 /*****************************************************************************
  * Hash Table Implementation
@@ -111,7 +132,7 @@ static unsigned int dev_hash(const char* busid)
 static struct device_registry_entry* dev_hash_find(const char* busid)
 {
     unsigned int idx = dev_hash(busid);
-    struct device_registry_entry* entry = hash_table[idx];
+    struct device_registry_entry* entry = DEVMGR()->hash_table[idx];
 
     while (entry != NULL)
     {
@@ -133,7 +154,7 @@ static struct device_registry_entry* dev_hash_find(const char* busid)
 static int dev_hash_insert(struct device_registry_entry* entry)
 {
     unsigned int idx = dev_hash(entry->busid);
-    struct device_registry_entry* curr = hash_table[idx];
+    struct device_registry_entry* curr = DEVMGR()->hash_table[idx];
 
     /* Check for duplicate */
     while (curr != NULL)
@@ -146,8 +167,8 @@ static int dev_hash_insert(struct device_registry_entry* entry)
     }
 
     /* Insert at head of chain */
-    entry->next = hash_table[idx];
-    hash_table[idx] = entry;
+    entry->next = DEVMGR()->hash_table[idx];
+    DEVMGR()->hash_table[idx] = entry;
 
     return 0;
 }
@@ -159,7 +180,7 @@ static int dev_hash_insert(struct device_registry_entry* entry)
 static void dev_hash_remove(const char* busid)
 {
     unsigned int idx = dev_hash(busid);
-    struct device_registry_entry** curr = &hash_table[idx];
+    struct device_registry_entry** curr = &DEVMGR()->hash_table[idx];
 
     while (*curr != NULL)
     {
@@ -180,17 +201,17 @@ static struct device_registry_entry* dev_alloc_entry(void)
 {
     int i;
 
-    if (device_count >= MAX_BUSY_DEVICES)
+    if (DEVMGR()->device_count >= MAX_BUSY_DEVICES)
     {
         return NULL;
     }
 
     for (i = 0; i < MAX_BUSY_DEVICES; i++)
     {
-        if (device_registry[i].busid[0] == '\0')
+        if (DEVMGR()->device_entries[i].busid[0] == '\0')
         {
-            device_count++;
-            return &device_registry[i];
+            DEVMGR()->device_count++;
+            return &DEVMGR()->device_entries[i];
         }
     }
 
@@ -209,7 +230,7 @@ static void dev_free_entry(struct device_registry_entry* entry)
         entry->state = DEV_STATE_AVAILABLE;
         entry->owner = NULL;
         entry->next = NULL;
-        device_count--;
+        DEVMGR()->device_count--;
     }
 }
 
@@ -231,18 +252,18 @@ static void dev_hash_init(void)
 
     for (i = 0; i < DEV_HASH_TABLE_SIZE; i++)
     {
-        hash_table[i] = NULL;
+        DEVMGR()->hash_table[i] = NULL;
     }
 
     for (i = 0; i < MAX_BUSY_DEVICES; i++)
     {
-        device_registry[i].busid[0] = '\0';
-        device_registry[i].state = DEV_STATE_AVAILABLE;
-        device_registry[i].owner = NULL;
-        device_registry[i].next = NULL;
+        DEVMGR()->device_entries[i].busid[0] = '\0';
+        DEVMGR()->device_entries[i].state = DEV_STATE_AVAILABLE;
+        DEVMGR()->device_entries[i].owner = NULL;
+        DEVMGR()->device_entries[i].next = NULL;
     }
 
-    device_count = 0;
+    DEVMGR()->device_count = 0;
 }
 
 /**
@@ -253,7 +274,7 @@ int usbip_devmgr_init(void)
 {
     dev_hash_init();
 
-    if (osal_mutex_init(&s_devmgr_lock) != OSAL_OK)
+    if (osal_mutex_init(&DEVMGR()->lock) != OSAL_OK)
     {
         return -1;
     }
@@ -263,40 +284,40 @@ int usbip_devmgr_init(void)
 
 int usbip_register_driver(struct usbip_device_driver* driver)
 {
-    osal_mutex_lock(&s_devmgr_lock);
-    if (driver_count >= MAX_DRIVERS)
+    osal_mutex_lock(&DEVMGR()->lock);
+    if (DEVMGR()->driver_count >= MAX_DRIVERS)
     {
-        osal_mutex_unlock(&s_devmgr_lock);
+        osal_mutex_unlock(&DEVMGR()->lock);
         LOG_ERR("Driver registry full");
 
         return -1;
     }
 
     /* Check if already registered */
-    for (int i = 0; i < driver_count; i++)
+    for (int i = 0; i < DEVMGR()->driver_count; i++)
     {
-        if (driver_registry[i] == driver)
+        if (DEVMGR()->drivers[i] == driver)
         {
-            osal_mutex_unlock(&s_devmgr_lock);
+            osal_mutex_unlock(&DEVMGR()->lock);
             LOG_WRN("Driver already registered: %s", driver->name);
 
             return -1;
         }
     }
 
-    driver_registry[driver_count++] = driver;
+    DEVMGR()->drivers[DEVMGR()->driver_count++] = driver;
 
     /* Call driver initialization */
     if (driver->init && driver->init(driver) < 0)
     {
-        driver_count--;
-        osal_mutex_unlock(&s_devmgr_lock);
+        DEVMGR()->driver_count--;
+        osal_mutex_unlock(&DEVMGR()->lock);
         LOG_ERR("Driver init failed: %s", driver->name);
 
         return -1;
     }
 
-    osal_mutex_unlock(&s_devmgr_lock);
+    osal_mutex_unlock(&DEVMGR()->lock);
     LOG_INF("Registered driver: %s", driver->name);
 
     return 0;
@@ -304,10 +325,10 @@ int usbip_register_driver(struct usbip_device_driver* driver)
 
 void usbip_unregister_driver(struct usbip_device_driver* driver)
 {
-    osal_mutex_lock(&s_devmgr_lock);
-    for (int i = 0; i < driver_count; i++)
+    osal_mutex_lock(&DEVMGR()->lock);
+    for (int i = 0; i < DEVMGR()->driver_count; i++)
     {
-        if (driver_registry[i] == driver)
+        if (DEVMGR()->drivers[i] == driver)
         {
             /* Call driver cleanup */
             if (driver->cleanup)
@@ -315,19 +336,19 @@ void usbip_unregister_driver(struct usbip_device_driver* driver)
                 driver->cleanup(driver);
             }
             /* Move subsequent drivers */
-            for (int j = i; j < driver_count - 1; j++)
+            for (int j = i; j < DEVMGR()->driver_count - 1; j++)
             {
-                driver_registry[j] = driver_registry[j + 1];
+                DEVMGR()->drivers[j] = DEVMGR()->drivers[j + 1];
             }
-            driver_count--;
-            osal_mutex_unlock(&s_devmgr_lock);
+            DEVMGR()->driver_count--;
+            osal_mutex_unlock(&DEVMGR()->lock);
             LOG_DBG("Unregistered driver: %s", driver->name);
 
             return;
         }
     }
 
-    osal_mutex_unlock(&s_devmgr_lock);
+    osal_mutex_unlock(&DEVMGR()->lock);
 }
 
 /*****************************************************************************
@@ -336,21 +357,21 @@ void usbip_unregister_driver(struct usbip_device_driver* driver)
 
 struct usbip_device_driver* usbip_get_first_driver(void)
 {
-    if (driver_count == 0)
+    if (DEVMGR()->driver_count == 0)
     {
         return NULL;
     }
 
-    return driver_registry[0];
+    return DEVMGR()->drivers[0];
 }
 
 struct usbip_device_driver* usbip_get_next_driver(struct usbip_device_driver* current)
 {
-    for (int i = 0; i < driver_count - 1; i++)
+    for (int i = 0; i < DEVMGR()->driver_count - 1; i++)
     {
-        if (driver_registry[i] == current)
+        if (DEVMGR()->drivers[i] == current)
         {
-            return driver_registry[i + 1];
+            return DEVMGR()->drivers[i + 1];
         }
     }
 
@@ -469,7 +490,7 @@ int usbip_bind_device(const char* busid, struct usbip_connection* conn)
     struct device_registry_entry* entry;
     int ret = 0;
 
-    osal_mutex_lock(&s_devmgr_lock);
+    osal_mutex_lock(&DEVMGR()->lock);
     entry = dev_hash_find(busid);
     if (entry != NULL)
     {
@@ -512,7 +533,7 @@ int usbip_bind_device(const char* busid, struct usbip_connection* conn)
         }
     }
 
-    osal_mutex_unlock(&s_devmgr_lock);
+    osal_mutex_unlock(&DEVMGR()->lock);
 
     return ret;
 }
@@ -527,7 +548,7 @@ void usbip_unbind_device(const char* busid)
 {
     struct device_registry_entry* entry;
 
-    osal_mutex_lock(&s_devmgr_lock);
+    osal_mutex_lock(&DEVMGR()->lock);
     entry = dev_hash_find(busid);
     if (entry != NULL)
     {
@@ -536,7 +557,7 @@ void usbip_unbind_device(const char* busid)
         LOG_DBG("Device %s unbound", busid);
     }
 
-    osal_mutex_unlock(&s_devmgr_lock);
+    osal_mutex_unlock(&DEVMGR()->lock);
 }
 
 /**
@@ -550,14 +571,14 @@ struct usbip_connection* usbip_get_device_owner(const char* busid)
     struct device_registry_entry* entry;
     struct usbip_connection* owner = NULL;
 
-    osal_mutex_lock(&s_devmgr_lock);
+    osal_mutex_lock(&DEVMGR()->lock);
     entry = dev_hash_find(busid);
     if (entry != NULL)
     {
         owner = entry->owner;
     }
 
-    osal_mutex_unlock(&s_devmgr_lock);
+    osal_mutex_unlock(&DEVMGR()->lock);
 
     return owner;
 }
@@ -573,14 +594,14 @@ int usbip_is_device_available(const char* busid)
     struct device_registry_entry* entry;
     int available = 1;
 
-    osal_mutex_lock(&s_devmgr_lock);
+    osal_mutex_lock(&DEVMGR()->lock);
     entry = dev_hash_find(busid);
     if (entry != NULL)
     {
         available = entry->state == DEV_STATE_AVAILABLE;
     }
 
-    osal_mutex_unlock(&s_devmgr_lock);
+    osal_mutex_unlock(&DEVMGR()->lock);
 
     return available;
 }
@@ -593,12 +614,12 @@ void usbip_set_device_busy(const char* busid)
 {
     struct device_registry_entry* entry;
 
-    osal_mutex_lock(&s_devmgr_lock);
+    osal_mutex_lock(&DEVMGR()->lock);
     entry = dev_hash_find(busid);
     if (entry != NULL)
     {
         entry->state = DEV_STATE_EXPORTED;
-        osal_mutex_unlock(&s_devmgr_lock);
+        osal_mutex_unlock(&DEVMGR()->lock);
         return;
     }
 
@@ -613,21 +634,21 @@ void usbip_set_device_busy(const char* busid)
         if (dev_hash_insert(entry) < 0)
         {
             dev_free_entry(entry);
-            osal_mutex_unlock(&s_devmgr_lock);
+            osal_mutex_unlock(&DEVMGR()->lock);
             LOG_ERR("Failed to insert device %s", busid);
 
             return;
         }
     }
 
-    osal_mutex_unlock(&s_devmgr_lock);
+    osal_mutex_unlock(&DEVMGR()->lock);
 }
 
 void usbip_set_device_available(const char* busid)
 {
     struct device_registry_entry* entry;
 
-    osal_mutex_lock(&s_devmgr_lock);
+    osal_mutex_lock(&DEVMGR()->lock);
     entry = dev_hash_find(busid);
     if (entry != NULL)
     {
@@ -635,7 +656,7 @@ void usbip_set_device_available(const char* busid)
         dev_free_entry(entry);
     }
 
-    osal_mutex_unlock(&s_devmgr_lock);
+    osal_mutex_unlock(&DEVMGR()->lock);
 }
 
 int usbip_is_device_busy(const char* busid)
@@ -643,14 +664,14 @@ int usbip_is_device_busy(const char* busid)
     struct device_registry_entry* entry;
     int busy = 0;
 
-    osal_mutex_lock(&s_devmgr_lock);
+    osal_mutex_lock(&DEVMGR()->lock);
     entry = dev_hash_find(busid);
     if (entry != NULL)
     {
         busy = entry->state == DEV_STATE_EXPORTED;
     }
 
-    osal_mutex_unlock(&s_devmgr_lock);
+    osal_mutex_unlock(&DEVMGR()->lock);
 
     return busy;
 }
