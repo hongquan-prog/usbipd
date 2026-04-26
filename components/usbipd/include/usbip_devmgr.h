@@ -161,18 +161,17 @@ void usbip_unregister_driver(struct usbip_device_driver* driver);
  * Driver Iteration Interface
  *****************************************************************************/
 
-/**
- * usbip_devmgr_begin - Get first registered driver
- * Return: Driver pointer, NULL if no drivers
- */
-struct usbip_device_driver* usbip_devmgr_begin(void);
+#ifndef CONFIG_USBIP_MAX_DRIVERS
+#define CONFIG_USBIP_MAX_DRIVERS 4
+#endif
 
 /**
- * usbip_devmgr_next - Get next driver
- * @current: Current driver
- * Return: Next driver pointer, NULL if no more drivers
+ * usbip_devmgr_get_driver_snapshot - Get a snapshot of registered drivers
+ * @drivers: Array to store driver pointers (caller allocated)
+ * @max_count: Maximum number of drivers to store
+ * Return: Number of drivers copied
  */
-struct usbip_device_driver* usbip_devmgr_next(struct usbip_device_driver* current);
+int usbip_devmgr_get_driver_snapshot(struct usbip_device_driver** drivers, int max_count);
 
 /*****************************************************************************
  * Device Query Interface (Wrapper Functions)

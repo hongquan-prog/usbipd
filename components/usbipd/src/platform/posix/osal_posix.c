@@ -22,6 +22,7 @@
 
 #include <errno.h>
 #include <pthread.h>
+#include <semaphore.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -150,6 +151,61 @@ static void posix_cond_destroy(void* handle)
 }
 
 /*****************************************************************************
+ * POSIX Semaphore Implementation
+ *****************************************************************************/
+
+static int posix_sem_init(void** handle)
+{
+    sem_t* s = malloc(sizeof(sem_t));
+    if (!s)
+    {
+        return OSAL_ERROR;
+    }
+
+    if (sem_init(s, 0, 0) != 0)
+    {
+        free(s);
+        return OSAL_ERROR;
+    }
+
+    *handle = s;
+    return OSAL_OK;
+}
+
+static int posix_sem_wait(void* handle)
+{
+    return sem_wait((sem_t*)handle) == 0 ? OSAL_OK : OSAL_ERROR;
+}
+
+static int posix_sem_trywait(void* handle)
+{
+    int ret = sem_trywait((sem_t*)handle);
+    if (ret == 0)
+    {
+        return OSAL_OK;
+    }
+    if (errno == EAGAIN)
+    {
+        return OSAL_TIMEOUT;
+    }
+    return OSAL_ERROR;
+}
+
+static int posix_sem_post(void* handle)
+{
+    return sem_post((sem_t*)handle) == 0 ? OSAL_OK : OSAL_ERROR;
+}
+
+static void posix_sem_destroy(void* handle)
+{
+    if (handle)
+    {
+        sem_destroy((sem_t*)handle);
+        free(handle);
+    }
+}
+
+/*****************************************************************************
  * POSIX Thread Implementation
  *****************************************************************************/
 
@@ -253,6 +309,13 @@ static osal_ops_t posix_ops = {
     .cond_signal = posix_cond_signal,
     .cond_broadcast = posix_cond_broadcast,
     .cond_destroy = posix_cond_destroy,
+
+    /* Semaphore */
+    .sem_init = posix_sem_init,
+    .sem_wait = posix_sem_wait,
+    .sem_trywait = posix_sem_trywait,
+    .sem_post = posix_sem_post,
+    .sem_destroy = posix_sem_destroy,
 
     /* Thread */
     .thread_create = posix_thread_create,

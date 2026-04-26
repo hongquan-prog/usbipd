@@ -99,11 +99,6 @@ struct usb_control_context
     size_t config_desc_len;
     uint8_t num_configs;
 
-    /*--- HID Descriptor (optional) ---*/
-    const struct usb_hid_descriptor* hid_desc;
-    const uint8_t* report_desc;
-    size_t report_desc_len;
-
     /*--- BOS Descriptor (optional, required for USB 2.01+) ---*/
     const void* bos_desc;
     size_t bos_desc_len;

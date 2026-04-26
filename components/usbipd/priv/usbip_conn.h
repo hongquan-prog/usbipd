@@ -14,6 +14,7 @@
 #include <stdatomic.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "hal/usbip_osal.h"
 #include "usbip_common.h"
 
 #ifdef __cplusplus
@@ -87,8 +88,8 @@ struct usbip_connection
     struct usbip_connection* next;
     struct usbip_connection* prev;
 
-    /* Transport context */
-    struct usbip_conn_ctx* transport_ctx;
+    /* Transport context (atomic: accessed from multiple threads) */
+    _Atomic(struct usbip_conn_ctx*) transport_ctx;
 
     /* Device binding */
     struct usbip_device_driver* driver;
@@ -105,9 +106,9 @@ struct usbip_connection
     struct osal_thread processor_thread;
     atomic_int running;
 
-    /* Flags for thread synchronization */
-    int rx_thread_started;
-    int processor_started;
+    /* Flags for thread synchronization (atomic) */
+    atomic_int rx_thread_started;
+    atomic_int processor_started;
 };
 
 /*****************************************************************************
@@ -171,26 +172,9 @@ void usbip_connection_destroy(struct usbip_connection* conn);
 int usbip_connection_start(struct usbip_connection* conn, struct usbip_device_driver* driver,
                            const char* busid);
 
-/**
- * usbip_connection_stop - Stop connection URB processing threads
- * @conn: Connection to stop
- */
-void usbip_connection_stop(struct usbip_connection* conn);
-
 /*****************************************************************************
  * URB Reply Interface
  *****************************************************************************/
-
-/**
- * usbip_connection_send_reply - Send URB response to client
- * @conn: Connection instance
- * @urb_ret: URB return header
- * @data: Response data (can be NULL)
- * @data_len: Data length
- * Return: Bytes sent on success, negative on failure
- */
-int usbip_connection_send_reply(struct usbip_connection* conn, struct usbip_header* urb_ret,
-                                const void* data, size_t data_len);
 
 #ifdef __cplusplus
 }

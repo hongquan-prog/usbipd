@@ -205,33 +205,6 @@ int usb_control_get_descriptor(const struct usb_setup_packet* setup,
         case USB_DT_OTHER_SPEED_CONFIG:
             return USB_CONTROL_STALL;
 
-        case USB_DT_HID:
-            if (ctx->hid_desc)
-            {
-                *data_out = osal_malloc(ctx->hid_desc->bLength);
-                if (*data_out)
-                {
-                    memcpy(*data_out, ctx->hid_desc, ctx->hid_desc->bLength);
-                    *data_len = ctx->hid_desc->bLength;
-
-                    return USB_CONTROL_OK;
-                }
-            }
-            break;
-
-        case USB_DT_REPORT:
-            if (ctx->report_desc && ctx->report_desc_len > 0)
-            {
-                *data_out = osal_malloc(ctx->report_desc_len);
-                if (*data_out)
-                {
-                    memcpy(*data_out, ctx->report_desc, ctx->report_desc_len);
-                    *data_len = ctx->report_desc_len;
-                    return USB_CONTROL_OK;
-                }
-            }
-            break;
-
         case USB_DT_BOS:
             if (ctx->bos_desc && ctx->bos_desc_len > 0)
             {

@@ -32,17 +32,6 @@ LOG_MODULE_REGISTER(devmgr, CONFIG_USBIP_LOG_LEVEL);
 struct usbip_connection;
 
 /*****************************************************************************
- * Driver Registry
- *****************************************************************************/
-
-#ifndef CONFIG_USBIP_MAX_DRIVERS
-#define CONFIG_USBIP_MAX_DRIVERS 4
-#endif
-#define MAX_DRIVERS CONFIG_USBIP_MAX_DRIVERS
-
-
-
-/*****************************************************************************
  * Device State Enumeration
  *****************************************************************************/
 
@@ -88,7 +77,7 @@ struct device_registry_entry
 static struct
 {
     /* Driver Registry */
-    struct usbip_device_driver* drivers[MAX_DRIVERS];
+    struct usbip_device_driver* drivers[CONFIG_USBIP_MAX_DRIVERS];
     int driver_count;
 
     /* Device Registry */
@@ -285,7 +274,7 @@ int usbip_devmgr_init(void)
 int usbip_register_driver(struct usbip_device_driver* driver)
 {
     osal_mutex_lock(&DEVMGR()->lock);
-    if (DEVMGR()->driver_count >= MAX_DRIVERS)
+    if (DEVMGR()->driver_count >= CONFIG_USBIP_MAX_DRIVERS)
     {
         osal_mutex_unlock(&DEVMGR()->lock);
         LOG_ERR("Driver registry full");
@@ -351,31 +340,32 @@ void usbip_unregister_driver(struct usbip_device_driver* driver)
     osal_mutex_unlock(&DEVMGR()->lock);
 }
 
-/*****************************************************************************
- * Driver Iteration Interface
- *****************************************************************************/
+/***************************************************************************
+ * Driver Snapshot Interface
+ ***************************************************************************/
 
-struct usbip_device_driver* usbip_devmgr_begin(void)
+int usbip_devmgr_get_driver_snapshot(struct usbip_device_driver** drivers, int max_count)
 {
-    if (DEVMGR()->driver_count == 0)
+    int count;
+
+    if (drivers == NULL || max_count <= 0)
     {
-        return NULL;
+        return 0;
     }
 
-    return DEVMGR()->drivers[0];
-}
-
-struct usbip_device_driver* usbip_devmgr_next(struct usbip_device_driver* current)
-{
-    for (int i = 0; i < DEVMGR()->driver_count - 1; i++)
+    osal_mutex_lock(&DEVMGR()->lock);
+    count = DEVMGR()->driver_count;
+    if (count > max_count)
     {
-        if (DEVMGR()->drivers[i] == current)
-        {
-            return DEVMGR()->drivers[i + 1];
-        }
+        count = max_count;
     }
+    for (int i = 0; i < count; i++)
+    {
+        drivers[i] = DEVMGR()->drivers[i];
+    }
+    osal_mutex_unlock(&DEVMGR()->lock);
 
-    return NULL;
+    return count;
 }
 
 /*****************************************************************************

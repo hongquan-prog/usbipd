@@ -92,10 +92,13 @@ static int usbip_server_handle_devlist(struct usbip_conn_ctx* ctx)
     struct usbip_usb_device udev;
     struct usbip_usb_interface iface;
     struct usbip_device_driver* driver;
+    struct usbip_device_driver* drivers[CONFIG_USBIP_MAX_DRIVERS];
     uint32_t reply_count;
     int device_count = 0;
-    int drv_idx;
-    int drv_count = 0;
+    int dev_idx;
+    int dev_count = 0;
+    int num_drivers = 0;
+    int i;
 
     /* Send operation header */
     if (usbip_send_op_common(ctx, OP_REP_DEVLIST, ST_OK) < 0)
@@ -105,12 +108,14 @@ static int usbip_server_handle_devlist(struct usbip_conn_ctx* ctx)
     }
 
     /* Count available (not busy) devices from all drivers */
-    for (driver = usbip_devmgr_begin(); driver != NULL; driver = usbip_devmgr_next(driver))
+    num_drivers = usbip_devmgr_get_driver_snapshot(drivers, CONFIG_USBIP_MAX_DRIVERS);
+    for (i = 0; i < num_drivers; i++)
     {
-        drv_count = usbip_driver_get_device_count(driver);
-        for (drv_idx = 0; drv_idx < drv_count; drv_idx++)
+        driver = drivers[i];
+        dev_count = usbip_driver_get_device_count(driver);
+        for (dev_idx = 0; dev_idx < dev_count; dev_idx++)
         {
-            if (usbip_driver_get_device_by_index(driver, drv_idx, &udev) < 0)
+            if (usbip_driver_get_device_by_index(driver, dev_idx, &udev) < 0)
             {
                 continue;
             }
@@ -135,12 +140,14 @@ static int usbip_server_handle_devlist(struct usbip_conn_ctx* ctx)
     LOG_DBG("Sending %d device(s)", device_count);
 
     /* Send each available device from all drivers */
-    for (driver = usbip_devmgr_begin(); driver != NULL; driver = usbip_devmgr_next(driver))
+    num_drivers = usbip_devmgr_get_driver_snapshot(drivers, CONFIG_USBIP_MAX_DRIVERS);
+    for (i = 0; i < num_drivers; i++)
     {
-        drv_count = usbip_driver_get_device_count(driver);
-        for (drv_idx = 0; drv_idx < drv_count; drv_idx++)
+        driver = drivers[i];
+        dev_count = usbip_driver_get_device_count(driver);
+        for (dev_idx = 0; dev_idx < dev_count; dev_idx++)
         {
-            if (usbip_driver_get_device_by_index(driver, drv_idx, &udev) < 0)
+            if (usbip_driver_get_device_by_index(driver, dev_idx, &udev) < 0)
             {
                 continue;
             }
@@ -161,7 +168,7 @@ static int usbip_server_handle_devlist(struct usbip_conn_ctx* ctx)
 
             /* Send interface information */
             memset(&iface, 0, sizeof(iface));
-            if (usbip_driver_get_interface(driver, drv_idx, &iface) < 0)
+            if (usbip_driver_get_interface(driver, dev_idx, &iface) < 0)
             {
                 LOG_WRN("Driver %s does not implement get_interface, using HID fallback",
                         driver->name);
@@ -199,10 +206,13 @@ static int usbip_server_handle_import_req(struct usbip_conn_ctx* ctx)
 {
     char busid[SYSFS_BUS_ID_SIZE];
     struct usbip_device_driver* driver = NULL;
+    struct usbip_device_driver* drivers[CONFIG_USBIP_MAX_DRIVERS];
     const struct usbip_usb_device* found_dev = NULL;
     struct usbip_connection* conn = NULL;
     struct usbip_usb_device reply_dev;
     int found = 0;
+    int num_drivers = 0;
+    int i;
 
     /* Receive busid */
     memset(busid, 0, sizeof(busid));
@@ -223,9 +233,10 @@ static int usbip_server_handle_import_req(struct usbip_conn_ctx* ctx)
     }
 
     /* Find device */
-    for (driver = usbip_devmgr_begin(); driver != NULL && !found;
-         driver = usbip_devmgr_next(driver))
+    num_drivers = usbip_devmgr_get_driver_snapshot(drivers, CONFIG_USBIP_MAX_DRIVERS);
+    for (i = 0; i < num_drivers && !found; i++)
     {
+        driver = drivers[i];
         found_dev = usbip_driver_get_device(driver, busid);
         if (found_dev)
         {
