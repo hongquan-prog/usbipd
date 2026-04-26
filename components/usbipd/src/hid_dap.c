@@ -375,6 +375,57 @@ static int dap_get_report(uint8_t report_type, uint8_t report_id, void* data, si
 }
 
 /**************************************************************************
+ * Control Transfer Callbacks
+ **************************************************************************/
+
+static int hid_dap_descriptor_handler(uint8_t type, uint8_t index, void* user_data,
+                                      void** data_out, size_t* data_len)
+{
+    (void)index;
+    (void)user_data;
+
+    switch (type)
+    {
+        case USB_DT_HID:
+            *data_out = osal_malloc(dap_cfg_desc.hid.bLength);
+            if (!*data_out)
+            {
+                return USB_CONTROL_ERROR;
+            }
+            memcpy(*data_out, &dap_cfg_desc.hid, dap_cfg_desc.hid.bLength);
+            *data_len = dap_cfg_desc.hid.bLength;
+            return USB_CONTROL_OK;
+
+        case USB_DT_REPORT:
+            *data_out = osal_malloc(sizeof(dap_report_desc));
+            if (!*data_out)
+            {
+                return USB_CONTROL_ERROR;
+            }
+            memcpy(*data_out, dap_report_desc, sizeof(dap_report_desc));
+            *data_len = sizeof(dap_report_desc);
+            return USB_CONTROL_OK;
+
+        default:
+            return USB_CONTROL_STALL;
+    }
+}
+
+static int hid_dap_class_handler(const struct usb_setup_packet* setup, void* user_data,
+                                 void** data_out, size_t* data_len)
+{
+    struct virtual_dap* vdap = (struct virtual_dap*)user_data;
+    int ret;
+
+    ret = hid_class_request_handler(&vdap->hid_ctx, setup, data_out, data_len);
+    if (ret < 0)
+    {
+        return USB_CONTROL_STALL;
+    }
+    return USB_CONTROL_OK;
+}
+
+/**************************************************************************
  * URB Processing
  **************************************************************************/
 
@@ -675,9 +726,9 @@ static int vdap_init(struct usbip_device_driver* driver)
 
     vdap.ctrl_ctx = (struct usb_control_context)USB_CONTROL_CONTEXT_INIT(
         &dap_dev_desc, &dap_cfg_desc, sizeof(dap_cfg_desc));
-    vdap.ctrl_ctx.hid_desc = &dap_cfg_desc.hid;
-    vdap.ctrl_ctx.report_desc = dap_report_desc;
-    vdap.ctrl_ctx.report_desc_len = sizeof(dap_report_desc);
+    vdap.ctrl_ctx.descriptor_handler = hid_dap_descriptor_handler;
+    vdap.ctrl_ctx.class_handler = hid_dap_class_handler;
+    vdap.ctrl_ctx.user_data = &vdap;
     vdap.ctrl_ctx.lang_id_desc = string0_desc;
     vdap.ctrl_ctx.string_descs = dap_string_descs;
     vdap.ctrl_ctx.num_strings = 3;

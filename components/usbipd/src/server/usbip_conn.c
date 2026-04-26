@@ -29,22 +29,12 @@
 
 LOG_MODULE_REGISTER(conn, CONFIG_USBIP_LOG_LEVEL);
 
-/*****************************************************************************
- * Forward Declarations for Thread Functions
- *****************************************************************************/
-
 static void* usbip_conn_rx_thread(void* arg);
 static void* usbip_conn_processor_thread(void* arg);
+static void* usbip_conn_cleanup_thread(void* arg);
+static void usbip_connection_request_stop(struct usbip_connection* conn);
 
-/*****************************************************************************
- * Global Connection Manager Instance
- *****************************************************************************/
-
-/**
- * struct conn_manager - Connection manager singleton
- *
- * Tracks all active connections and provides thread-safe access.
- */
+/* Connection manager singleton */
 struct conn_manager
 {
     struct usbip_connection* head; /* Head of active connections list */
@@ -52,28 +42,19 @@ struct conn_manager
     struct osal_mutex lock;        /* Protects list operations */
     int active_count;              /* Current active connection count */
     int max_connections;           /* Maximum allowed connections */
+    struct osal_thread cleanup_thread; /* Background cleanup thread */
+    atomic_int cleanup_thread_running; /* Cleanup thread control flag */
+    struct osal_sem reap_sem;      /* Signal cleanup thread to reap */
 };
 /* clang-format off */
-static struct conn_manager s_conn_manager = {                                                                                                                                  
-      .head = NULL,                                                                                                                                                              
-      .tail = NULL,                                                                                                                                                              
-      .active_count = 0,                                                                                                                                                         
+static struct conn_manager s_conn_manager = {
+      .head = NULL,
+      .tail = NULL,
+      .active_count = 0,
       .max_connections = USBIP_MAX_CONNECTIONS
     };
 /* clang-format on */
 
-/*****************************************************************************
- * Connection Manager Operations
- *****************************************************************************/
-
-/**
- * usbip_conn_manager_init - Initialize connection manager
- *
- * Initializes the global connection manager singleton. Must be called
- * before any other connection operations.
- *
- * Return: 0 on success, -1 on failure
- */
 int usbip_conn_manager_init(void)
 {
     int ret;
@@ -89,59 +70,66 @@ int usbip_conn_manager_init(void)
     s_conn_manager.tail = NULL;
     s_conn_manager.active_count = 0;
 
+    atomic_init(&s_conn_manager.cleanup_thread_running, 1);
+
+    ret = osal_sem_init(&s_conn_manager.reap_sem);
+    if (ret != OSAL_OK)
+    {
+        LOG_ERR("Failed to initialize reap semaphore");
+        osal_mutex_destroy(&s_conn_manager.lock);
+        return -1;
+    }
+
+    ret = osal_thread_create(&s_conn_manager.cleanup_thread, "ConnCleanup",
+                             usbip_conn_cleanup_thread, NULL,
+                             CONFIG_URB_THREAD_STACK_SIZE, CONFIG_URB_THREAD_PRIORITY);
+    if (ret != OSAL_OK)
+    {
+        LOG_ERR("Failed to create connection cleanup thread");
+        osal_sem_destroy(&s_conn_manager.reap_sem);
+        osal_mutex_destroy(&s_conn_manager.lock);
+        return -1;
+    }
+
     LOG_INF("Connection manager initialized (max=%d)", s_conn_manager.max_connections);
 
     return 0;
 }
 
-/**
- * usbip_conn_manager_cleanup - Cleanup all connections and manager resources
- *
- * Stops and destroys all active connections, then releases manager resources.
- * Should be called during server shutdown.
- */
 void usbip_conn_manager_cleanup(void)
 {
     struct usbip_connection* conn;
-    struct usbip_connection* next;
+    struct usbip_connection* conns[USBIP_MAX_CONNECTIONS];
+    int count = 0;
 
     LOG_INF("Cleaning up connection manager (%d active)", s_conn_manager.active_count);
 
+    /* Collect all connections under lock, then stop outside lock */
     osal_mutex_lock(&s_conn_manager.lock);
-
-    conn = s_conn_manager.head;
-    while (conn != NULL)
+    for (conn = s_conn_manager.head; conn != NULL && count < USBIP_MAX_CONNECTIONS; conn = conn->next)
     {
-        next = conn->next;
-        osal_mutex_unlock(&s_conn_manager.lock);
-
-        /* Stop and destroy connection (this will remove from list) */
-        usbip_connection_stop(conn);
-        usbip_connection_destroy(conn);
-
-        osal_mutex_lock(&s_conn_manager.lock);
-        conn = next;
+        conns[count++] = conn;
     }
 
+    osal_mutex_unlock(&s_conn_manager.lock);
+    for (int i = 0; i < count; i++)
+    {
+        usbip_connection_request_stop(conns[i]);
+    }
+    /* Signal cleanup thread to process remaining stops and exit */
+    atomic_store_explicit(&s_conn_manager.cleanup_thread_running, 0, memory_order_seq_cst);
+    osal_sem_post(&s_conn_manager.reap_sem);
+    osal_thread_join(&s_conn_manager.cleanup_thread);
+    osal_sem_destroy(&s_conn_manager.reap_sem);
+    /* ConnCleanup has destroyed all connections; just clear the list state */
     s_conn_manager.head = NULL;
     s_conn_manager.tail = NULL;
     s_conn_manager.active_count = 0;
-
-    osal_mutex_unlock(&s_conn_manager.lock);
     osal_mutex_destroy(&s_conn_manager.lock);
 
     LOG_INF("Connection manager cleanup complete");
 }
 
-/**
- * usbip_conn_manager_add - Add connection to active list
- * @conn: Connection to add (must be fully initialized)
- *
- * Adds a connection to the active connections list. The connection
- * must be properly initialized before calling this function.
- *
- * Return: 0 on success, -1 if max connections reached or error
- */
 int usbip_conn_manager_add(struct usbip_connection* conn)
 {
     int ret = 0;
@@ -184,13 +172,6 @@ unlock:
     return ret;
 }
 
-/**
- * usbip_conn_manager_remove - Remove connection from active list
- * @conn: Connection to remove
- *
- * Removes a connection from the active connections list.
- * The connection is not destroyed by this function.
- */
 void usbip_conn_manager_remove(struct usbip_connection* conn)
 {
     if (conn == NULL)
@@ -199,6 +180,13 @@ void usbip_conn_manager_remove(struct usbip_connection* conn)
     }
 
     osal_mutex_lock(&s_conn_manager.lock);
+
+    /* Check if conn is actually in the list */
+    if (conn->prev == NULL && conn->next == NULL && s_conn_manager.head != conn)
+    {
+        osal_mutex_unlock(&s_conn_manager.lock);
+        return;
+    }
 
     /* Unlink from list */
     if (conn->prev != NULL)
@@ -228,18 +216,9 @@ void usbip_conn_manager_remove(struct usbip_connection* conn)
     }
 
     LOG_DBG("Connection removed (active=%d)", s_conn_manager.active_count);
-
     osal_mutex_unlock(&s_conn_manager.lock);
 }
 
-/**
- * usbip_conn_manager_get_count - Get current active connection count
- *
- * Returns the number of active connections. This is useful for checking
- * connection limits before accepting new import requests.
- *
- * Return: Number of active connections
- */
 int usbip_conn_manager_get_count(void)
 {
     int count;
@@ -251,20 +230,79 @@ int usbip_conn_manager_get_count(void)
     return count;
 }
 
-/*****************************************************************************
- * Connection Lifecycle Operations
- *****************************************************************************/
+static void usbip_conn_manager_reap(void)
+{
+    struct usbip_connection* conn;
 
-/**
- * usbip_connection_create - Create new connection
- * @ctx: Transport context (ownership transferred to connection)
- *
- * Allocates and initializes a new connection structure. The transport
- * context is stored in the connection and will be closed when the
- * connection is destroyed.
- *
- * Return: Connection pointer on success, NULL on failure
- */
+    osal_mutex_lock(&s_conn_manager.lock);
+    conn = s_conn_manager.head;
+    while (conn != NULL)
+    {
+        struct usbip_connection* next = conn->next;
+        if (conn->state == CONN_STATE_CLOSED)
+        {
+            osal_mutex_unlock(&s_conn_manager.lock);
+            usbip_connection_destroy(conn);
+            osal_mutex_lock(&s_conn_manager.lock);
+        }
+        conn = next;
+    }
+    osal_mutex_unlock(&s_conn_manager.lock);
+}
+
+static void usbip_conn_manager_process_stopping(void)
+{
+    struct usbip_connection* conn;
+
+    osal_mutex_lock(&s_conn_manager.lock);
+    conn = s_conn_manager.head;
+    while (conn != NULL)
+    {
+        if (conn->state == CONN_STATE_CLOSING &&
+            atomic_load_explicit(&conn->rx_thread_started, memory_order_acquire) == 0 &&
+            atomic_load_explicit(&conn->processor_started, memory_order_acquire) == 0)
+        {
+            LOG_DBG("ConnCleanup: Finishing stop for %s", conn->busid);
+
+            /* Destroy URB queue */
+            usbip_urb_queue_destroy(&conn->urb_queue);
+            /* Unexport device and unbind */
+            if (conn->driver && conn->busid[0] != '\0')
+            {
+                usbip_driver_unexport_device(conn->driver, conn->busid);
+                usbip_unbind_device(conn->busid);
+            }
+
+            /* Transition to CLOSED */
+            osal_mutex_lock(&conn->state_lock);
+            conn->state = CONN_STATE_CLOSED;
+            osal_mutex_unlock(&conn->state_lock);
+        }
+        conn = conn->next;
+    }
+    osal_mutex_unlock(&s_conn_manager.lock);
+}
+
+static void* usbip_conn_cleanup_thread(void* arg)
+{
+    (void)arg;
+
+    LOG_DBG("Connection cleanup thread started");
+    while (atomic_load_explicit(&s_conn_manager.cleanup_thread_running, memory_order_seq_cst))
+    {
+        osal_sem_wait(&s_conn_manager.reap_sem);
+        usbip_conn_manager_process_stopping();
+        usbip_conn_manager_reap();
+    }
+
+    /* Final pass before exit: handle any remaining connections */
+    usbip_conn_manager_process_stopping();
+    usbip_conn_manager_reap();
+    LOG_DBG("Connection cleanup thread exiting");
+
+    return NULL;
+}
+
 struct usbip_connection* usbip_connection_create(struct usbip_conn_ctx* ctx)
 {
     struct usbip_connection* conn;
@@ -283,10 +321,17 @@ struct usbip_connection* usbip_connection_create(struct usbip_conn_ctx* ctx)
         return NULL;
     }
 
-    memset(conn, 0, sizeof(struct usbip_connection));
-    conn->transport_ctx = ctx;
+    conn->next = NULL;
+    conn->prev = NULL;
+    atomic_init(&conn->transport_ctx, ctx);
+    conn->driver = NULL;
+    memset(conn->busid, 0, sizeof(conn->busid));
     conn->state = CONN_STATE_INIT;
     atomic_init(&conn->stop_in_progress, 0);
+    atomic_init(&conn->running, 0);
+    atomic_init(&conn->rx_thread_started, 0);
+    atomic_init(&conn->processor_started, 0);
+    conn->urb_queue.priv = NULL;
 
     /* Initialize state lock */
     ret = osal_mutex_init(&conn->state_lock);
@@ -302,14 +347,6 @@ struct usbip_connection* usbip_connection_create(struct usbip_conn_ctx* ctx)
     return conn;
 }
 
-/**
- * usbip_connection_destroy - Destroy connection and free resources
- * @conn: Connection to destroy
- *
- * Destroys a connection and releases all associated resources.
- * If the connection is still in the active list, it is removed first.
- * Transport context should be closed by usbip_connection_stop() before calling this.
- */
 void usbip_connection_destroy(struct usbip_connection* conn)
 {
     if (conn == NULL)
@@ -318,41 +355,15 @@ void usbip_connection_destroy(struct usbip_connection* conn)
     }
 
     LOG_DBG("Destroying connection: %p", (void*)conn);
-
     /* Remove from manager list if still present */
-    if (conn->next != NULL || conn->prev != NULL || s_conn_manager.head == conn)
-    {
-        usbip_conn_manager_remove(conn);
-    }
-
-    /* Ensure stopped - this will wait for threads to complete */
-    if (conn->state == CONN_STATE_ACTIVE || conn->state == CONN_STATE_CLOSING)
-    {
-        usbip_connection_stop(conn);
-    }
-
-    /* Destroy state lock */
+    usbip_conn_manager_remove(conn);
     osal_mutex_destroy(&conn->state_lock);
-
-    /* Transport context already closed in usbip_connection_stop() */
-    conn->transport_ctx = NULL;
-
+    atomic_store_explicit(&conn->transport_ctx, NULL, memory_order_relaxed);
     osal_free(conn);
 
     LOG_DBG("Connection destroyed");
 }
 
-/**
- * usbip_connection_start - Start connection URB processing threads
- * @conn: Connection to start
- * @driver: Device driver for this connection
- * @busid: Device bus ID
- *
- * Starts the RX and Processor threads for URB processing. The connection
- * transitions from CONN_STATE_INIT to CONN_STATE_ACTIVE.
- *
- * Return: 0 on success, -1 on failure
- */
 int usbip_connection_start(struct usbip_connection* conn, struct usbip_device_driver* driver,
                            const char* busid)
 {
@@ -391,47 +402,42 @@ int usbip_connection_start(struct usbip_connection* conn, struct usbip_device_dr
     if (ret != OSAL_OK)
     {
         LOG_ERR("Failed to create processor thread for %s", busid);
-        usbip_urb_queue_destroy(&conn->urb_queue);
-        atomic_store_explicit(&conn->running, 0, memory_order_seq_cst);
-        return -1;
+        goto fail_queue;
     }
-    conn->processor_started = 1;
 
+    atomic_store_explicit(&conn->processor_started, 1, memory_order_release);
     /* Start RX thread */
     ret = osal_thread_create(&conn->rx_thread, "RX", usbip_conn_rx_thread, conn,
                              CONFIG_URB_THREAD_STACK_SIZE, CONFIG_URB_THREAD_PRIORITY);
     if (ret != OSAL_OK)
     {
         LOG_ERR("Failed to create RX thread for %s", busid);
-        atomic_store_explicit(&conn->running, 0, memory_order_seq_cst);
-        usbip_urb_queue_close(&conn->urb_queue);
-        osal_thread_join(&conn->processor_thread);
-        conn->processor_started = 0;
-        usbip_urb_queue_destroy(&conn->urb_queue);
-        return -1;
+        goto fail_processor;
     }
-    conn->rx_thread_started = 1;
 
+    atomic_store_explicit(&conn->rx_thread_started, 1, memory_order_release);
     /* Mark connection as active */
     osal_mutex_lock(&conn->state_lock);
     conn->state = CONN_STATE_ACTIVE;
     osal_mutex_unlock(&conn->state_lock);
-
     LOG_INF("Connection started for device %s (RX + Processor threads)", busid);
 
     return 0;
+
+fail_processor:
+    atomic_store_explicit(&conn->running, 0, memory_order_seq_cst);
+    usbip_urb_queue_close(&conn->urb_queue);
+    osal_thread_join(&conn->processor_thread);
+    atomic_store_explicit(&conn->processor_started, 0, memory_order_relaxed);
+fail_queue:
+    usbip_urb_queue_destroy(&conn->urb_queue);
+    return -1;
 }
 
-/**
- * usbip_connection_stop - Stop connection URB processing threads
- * @conn: Connection to stop
- *
- * Signals the URB processing threads to stop and waits for them
- * to complete. The connection transitions to CONN_STATE_CLOSED.
- */
-void usbip_connection_stop(struct usbip_connection* conn)
+static void usbip_connection_request_stop(struct usbip_connection* conn)
 {
     int was_active;
+    struct usbip_conn_ctx* ctx;
 
     if (conn == NULL)
     {
@@ -440,105 +446,54 @@ void usbip_connection_stop(struct usbip_connection* conn)
 
     osal_mutex_lock(&conn->state_lock);
     was_active = (conn->state == CONN_STATE_ACTIVE);
-
     if (was_active)
     {
-        LOG_DBG("Stopping connection for device %s", conn->busid);
+        LOG_DBG("Requesting stop for connection %s", conn->busid);
         conn->state = CONN_STATE_CLOSING;
         atomic_store_explicit(&conn->running, 0, memory_order_seq_cst);
     }
-    osal_mutex_unlock(&conn->state_lock);
 
+    osal_mutex_unlock(&conn->state_lock);
     if (!was_active)
     {
         return;
     }
 
-    /* Ensure stop sequence runs only once */
+    /* Ensure signal sequence runs only once */
     if (atomic_exchange_explicit(&conn->stop_in_progress, 1, memory_order_seq_cst) != 0)
     {
-        /* Another thread is already tearing down. If we are the RX thread,
-         * return immediately so the other thread can join us. */
-        if (conn->rx_thread_started && osal_thread_is_self(&conn->rx_thread))
-        {
-            return;
-        }
-        /* Otherwise wait for stop to complete */
-        LOG_WRN("Connection stop already in progress, waiting for completion. busid=%s state=%d",
-                conn->busid, conn->state);
-        while (conn->state != CONN_STATE_CLOSED)
-        {
-            osal_sleep_ms(10);
-        }
-
-        LOG_INF("Connection stop completed. busid=%s", conn->busid);
         return;
     }
 
-    /* Close URB queue first to signal threads to exit gracefully */
+    /* Close URB queue to signal processor thread to exit */
     usbip_urb_queue_close(&conn->urb_queue);
 
-    /* Give threads time to respond to queue close */
-    osal_sleep_ms(10);
-
     /* Close transport to force unblock RX thread from recv */
-    if (conn->transport_ctx)
+    ctx = atomic_load_explicit(&conn->transport_ctx, memory_order_relaxed);
+    if (ctx)
     {
         LOG_DBG("Closing transport for %s", conn->busid);
-        transport_close(conn->transport_ctx);
+        transport_close(ctx);
+        atomic_store_explicit(&conn->transport_ctx, NULL, memory_order_release);
     }
 
-    /* Wait for processor thread to complete */
-    if (conn->processor_started)
-    {
-        LOG_DBG("Waiting for processor thread to complete for %s", conn->busid);
-        osal_thread_join(&conn->processor_thread);
-        LOG_DBG("Processor thread completed for %s", conn->busid);
-        conn->processor_started = 0;
-    }
-
-    /* Wait for RX thread to complete */
-    if (conn->rx_thread_started)
-    {
-        LOG_DBG("Waiting for RX thread to complete for %s", conn->busid);
-        /* Fix: FreeRTOS eTaskGetState never returns eDeleted for the calling task.
-         * If we are the RX thread ourselves, skip join to avoid self-join deadlock. */
-        if (!osal_thread_is_self(&conn->rx_thread))
-        {
-            osal_thread_join(&conn->rx_thread);
-        }
-        LOG_DBG("RX thread completed for %s", conn->busid);
-        conn->rx_thread_started = 0;
-    }
-
-    /* Cleanup URB queue */
-    usbip_urb_queue_destroy(&conn->urb_queue);
-
-    /* Unexport device and unbind from connection */
-    if (conn->driver && conn->busid[0] != '\0')
-    {
-        LOG_DBG("Unexporting device %s", conn->busid);
-        usbip_driver_unexport_device(conn->driver, conn->busid);
-        usbip_unbind_device(conn->busid);
-    }
-
-    osal_mutex_lock(&conn->state_lock);
-    conn->state = CONN_STATE_CLOSED;
-    osal_mutex_unlock(&conn->state_lock);
-
-    LOG_INF("Connection stopped for device %s", conn->busid);
+    /* Notify cleanup thread that this connection needs processing */
+    osal_sem_post(&s_conn_manager.reap_sem);
 }
 
-/*****************************************************************************
- * URB Reply Interface
- *****************************************************************************/
-
-int usbip_connection_send_reply(struct usbip_connection* conn, struct usbip_header* urb_ret,
-                                const void* data, size_t data_len)
+static int usbip_connection_send_reply(struct usbip_connection* conn, struct usbip_header* urb_ret,
+                                       const void* data, size_t data_len)
 {
     ssize_t n;
+    struct usbip_conn_ctx* ctx;
 
-    if (conn == NULL || conn->transport_ctx == NULL || urb_ret == NULL)
+    if (conn == NULL || urb_ret == NULL)
+    {
+        return -1;
+    }
+
+    ctx = atomic_load_explicit(&conn->transport_ctx, memory_order_acquire);
+    if (ctx == NULL)
     {
         return -1;
     }
@@ -550,7 +505,7 @@ int usbip_connection_send_reply(struct usbip_connection* conn, struct usbip_head
 
     usbip_pack_header(urb_ret, 1);
 
-    n = transport_send(conn->transport_ctx, urb_ret, sizeof(*urb_ret));
+    n = transport_send(ctx, urb_ret, sizeof(*urb_ret));
     if (n != sizeof(*urb_ret))
     {
         LOG_ERR("send header failed");
@@ -559,7 +514,7 @@ int usbip_connection_send_reply(struct usbip_connection* conn, struct usbip_head
 
     if (data && data_len > 0)
     {
-        n = transport_send(conn->transport_ctx, data, data_len);
+        n = transport_send(ctx, data, data_len);
         if (n != (ssize_t)data_len)
         {
             LOG_ERR("send data failed");
@@ -584,33 +539,32 @@ static int usbip_recv_header(struct usbip_conn_ctx* ctx, struct usbip_header* hd
     return 0;
 }
 
-/*****************************************************************************
- * Per-Connection URB Processing Threads
- *****************************************************************************/
-
-/**
- * usbip_conn_rx_thread - RX thread for receiving URB requests
- * @arg: Connection pointer
- *
- * Receives URB headers and data from the client and pushes them to the
- * connection's URB queue for processing by the processor thread.
- */
 static void* usbip_conn_rx_thread(void* arg)
 {
     struct usbip_connection* conn = (struct usbip_connection*)arg;
     struct usbip_header urb_cmd;
     uint8_t urb_data[USBIP_URB_DATA_MAX_SIZE];
     size_t urb_data_len;
+    int recv_ret;
+    struct usbip_conn_ctx* ctx;
 
     LOG_DBG("RX thread started for %s", conn->busid);
 
     while (atomic_load_explicit(&conn->running, memory_order_seq_cst))
     {
-        int recv_ret = usbip_recv_header(conn->transport_ctx, &urb_cmd);
+        ctx = atomic_load_explicit(&conn->transport_ctx, memory_order_acquire);
+        if (ctx == NULL)
+        {
+            LOG_DBG("RX: transport_ctx is NULL for %s", conn->busid);
+            usbip_connection_request_stop(conn);
+            break;
+        }
 
+        recv_ret = usbip_recv_header(ctx, &urb_cmd);
         if (recv_ret < 0)
         {
             LOG_DBG("RX: Connection closed or error for %s", conn->busid);
+            usbip_connection_request_stop(conn);
             break;
         }
 
@@ -627,10 +581,11 @@ static void* usbip_conn_rx_thread(void* arg)
                 urb_data_len = USBIP_URB_DATA_MAX_SIZE;
             }
 
-            if (transport_recv(conn->transport_ctx, urb_data, urb_data_len) !=
+            if (transport_recv(ctx, urb_data, urb_data_len) !=
                 (ssize_t)urb_data_len)
             {
                 LOG_ERR("RX: Failed to receive URB data for %s", conn->busid);
+                usbip_connection_request_stop(conn);
                 break;
             }
         }
@@ -638,29 +593,20 @@ static void* usbip_conn_rx_thread(void* arg)
         if (usbip_urb_queue_push(&conn->urb_queue, &urb_cmd, urb_data, urb_data_len) < 0)
         {
             LOG_DBG("RX: Queue push failed, connection closing");
+            usbip_connection_request_stop(conn);
             break;
         }
     }
 
-    /* Signal connection to stop */
-    atomic_store_explicit(&conn->running, 0, memory_order_seq_cst);
-    usbip_urb_queue_close(&conn->urb_queue);
-
     LOG_DBG("RX thread exiting for %s", conn->busid);
 
-    /* Auto-cleanup: stop and destroy connection when RX thread exits */
-    usbip_connection_destroy(conn);
+    /* Mark RX thread as exited and notify cleanup thread */
+    atomic_store_explicit(&conn->rx_thread_started, 0, memory_order_release);
+    osal_sem_post(&s_conn_manager.reap_sem);
 
     return NULL;
 }
 
-/**
- * usbip_conn_processor_thread - Processor thread for handling URBs
- * @arg: Connection pointer
- *
- * Pops URBs from the queue, calls the device driver to handle them,
- * and sends responses back to the client.
- */
 static void* usbip_conn_processor_thread(void* arg)
 {
     struct usbip_connection* conn = (struct usbip_connection*)arg;
@@ -693,13 +639,7 @@ static void* usbip_conn_processor_thread(void* arg)
         {
             LOG_ERR("Processor: URB handling error for %s", conn->busid);
             osal_free(data_out);
-            atomic_store_explicit(&conn->running, 0, memory_order_seq_cst);
-            usbip_urb_queue_close(&conn->urb_queue);
-            if (conn->transport_ctx)
-            {
-                transport_close(conn->transport_ctx);
-                conn->transport_ctx = NULL;
-            }
+            usbip_connection_request_stop(conn);
             break;
         }
 
@@ -710,13 +650,7 @@ static void* usbip_conn_processor_thread(void* arg)
             {
                 LOG_ERR("Processor: Failed to send URB reply for %s", conn->busid);
                 osal_free(data_out);
-                atomic_store_explicit(&conn->running, 0, memory_order_seq_cst);
-                usbip_urb_queue_close(&conn->urb_queue);
-                if (conn->transport_ctx)
-                {
-                    transport_close(conn->transport_ctx);
-                    conn->transport_ctx = NULL;
-                }
+                usbip_connection_request_stop(conn);
                 break;
             }
         }
@@ -726,6 +660,8 @@ static void* usbip_conn_processor_thread(void* arg)
 
     /* Signal RX thread to stop if not already stopping */
     atomic_store_explicit(&conn->running, 0, memory_order_seq_cst);
+    atomic_store_explicit(&conn->processor_started, 0, memory_order_release);
+    osal_sem_post(&s_conn_manager.reap_sem);
     LOG_INF("Processor thread exiting for %s", conn->busid);
 
     return NULL;

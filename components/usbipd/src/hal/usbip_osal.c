@@ -190,6 +190,72 @@ void osal_cond_destroy(struct osal_cond* cond)
 }
 
 /*****************************************************************************
+ * Semaphore Wrapper Functions
+ *****************************************************************************/
+
+int osal_sem_init(struct osal_sem* sem)
+{
+    const osal_ops_t* ops = osal_get_ops();
+
+    if (!ops || !ops->sem_init || !sem)
+    {
+        return OSAL_ERROR;
+    }
+
+    sem->handle = NULL;
+    return ops->sem_init(&sem->handle);
+}
+
+int osal_sem_wait(struct osal_sem* sem)
+{
+    const osal_ops_t* ops = osal_get_ops();
+
+    if (!ops || !ops->sem_wait || !sem || !sem->handle)
+    {
+        return OSAL_ERROR;
+    }
+
+    return ops->sem_wait(sem->handle);
+}
+
+int osal_sem_trywait(struct osal_sem* sem)
+{
+    const osal_ops_t* ops = osal_get_ops();
+
+    if (!ops || !ops->sem_trywait || !sem || !sem->handle)
+    {
+        return OSAL_ERROR;
+    }
+
+    return ops->sem_trywait(sem->handle);
+}
+
+int osal_sem_post(struct osal_sem* sem)
+{
+    const osal_ops_t* ops = osal_get_ops();
+
+    if (!ops || !ops->sem_post || !sem || !sem->handle)
+    {
+        return OSAL_ERROR;
+    }
+
+    return ops->sem_post(sem->handle);
+}
+
+void osal_sem_destroy(struct osal_sem* sem)
+{
+    const osal_ops_t* ops = osal_get_ops();
+
+    if (!ops || !ops->sem_destroy || !sem || !sem->handle)
+    {
+        return;
+    }
+
+    ops->sem_destroy(sem->handle);
+    sem->handle = NULL;
+}
+
+/*****************************************************************************
  * Thread Wrapper Functions
  *****************************************************************************/
 

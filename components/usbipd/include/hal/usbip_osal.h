@@ -52,6 +52,13 @@ struct osal_ops
     int (*cond_broadcast)(void* cond);
     void (*cond_destroy)(void* handle);
 
+    /* Semaphore */
+    int (*sem_init)(void** handle);
+    int (*sem_wait)(void* handle);
+    int (*sem_trywait)(void* handle);
+    int (*sem_post)(void* handle);
+    void (*sem_destroy)(void* handle);
+
     /* Thread */
     int (*thread_create)(void** handle, const char *name, void* (*func)(void*), void* arg, size_t stack_size,
                          int priority);
@@ -130,6 +137,11 @@ struct osal_cond
     void* handle; /* Platform-specific handle */
 };
 
+struct osal_sem
+{
+    void* handle; /* Platform-specific handle */
+};
+
 /**
  * osal_cond_init - Initialize condition variable
  * @cond: Condition variable pointer
@@ -173,6 +185,12 @@ int osal_cond_broadcast(struct osal_cond* cond);
  * @cond: Condition variable pointer
  */
 void osal_cond_destroy(struct osal_cond* cond);
+
+int osal_sem_init(struct osal_sem* sem);
+int osal_sem_wait(struct osal_sem* sem);
+int osal_sem_trywait(struct osal_sem* sem);
+int osal_sem_post(struct osal_sem* sem);
+void osal_sem_destroy(struct osal_sem* sem);
 
 typedef void* (*osal_thread_func)(void* arg);
 
