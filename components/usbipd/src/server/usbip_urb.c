@@ -240,6 +240,11 @@ int usbip_urb_queue_pop(struct usbip_conn_urb_queue* q, struct usbip_header* hea
 
     if (slot->data_len > 0 && data)
     {
+        if (*data_len < slot->data_len)
+        {
+            osal_mutex_unlock(&queue->lock);
+            return -1;
+        }
         memcpy(data, slot->data, slot->data_len);
     }
 

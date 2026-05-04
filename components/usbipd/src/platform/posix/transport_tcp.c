@@ -26,7 +26,10 @@
 #include <unistd.h>
 
 #include "hal/usbip_osal.h"
+#include "hal/usbip_log.h"
 #include "hal/usbip_transport.h"
+
+LOG_MODULE_REGISTER(tcp, LOG_LEVEL_INF);
 
 void transport_register(const char* name, struct usbip_transport* trans);
 
@@ -118,10 +121,16 @@ static struct usbip_conn_ctx* tcp_accept(struct usbip_transport* trans)
     }
 
     /* Set TCP_NODELAY - Disable Nagle algorithm to reduce latency */
-    setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt));
+    if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt)) < 0)
+    {
+        LOG_WRN("Failed to set TCP_NODELAY");
+    }
 
     /* Set SO_KEEPALIVE - Keep connection alive */
-    setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &opt, sizeof(opt));
+    if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &opt, sizeof(opt)) < 0)
+    {
+        LOG_WRN("Failed to set SO_KEEPALIVE");
+    }
 
 #ifdef DEBUG
     printf("Accepted connection from %s:%d\n", inet_ntoa(client_addr.sin_addr),
@@ -179,7 +188,9 @@ static ssize_t tcp_recv(struct usbip_conn_ctx* ctx, void* buf, size_t len)
                 /* Connection closed */
                 return 0;
             }
+
             perror("recv");
+
             return -1;
         }
         total += n;
@@ -245,15 +256,25 @@ static void tcp_close(struct usbip_conn_ctx* ctx)
 
 static void tcp_destroy(struct usbip_transport* trans)
 {
-    struct tcp_transport_priv* priv = trans->priv;
+    struct tcp_transport_priv* priv;
+    int fd;
 
-    if (priv)
+    if (!trans)
     {
-        if (priv->fd >= 0)
-        {
-            close(priv->fd);
-            priv->fd = -1;
-        }
+        return;
+    }
+
+    priv = trans->priv;
+    if (!priv)
+    {
+        return;
+    }
+
+    fd = priv->fd;
+    if (fd >= 0)
+    {
+        close(fd);
+        priv->fd = -1;
     }
 }
 

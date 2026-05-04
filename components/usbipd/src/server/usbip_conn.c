@@ -321,6 +321,7 @@ struct usbip_connection* usbip_connection_create(struct usbip_conn_ctx* ctx)
         return NULL;
     }
 
+    memset(conn, 0, sizeof(*conn));
     conn->next = NULL;
     conn->prev = NULL;
     atomic_init(&conn->transport_ctx, ctx);
@@ -469,7 +470,7 @@ static void usbip_connection_request_stop(struct usbip_connection* conn)
     usbip_urb_queue_close(&conn->urb_queue);
 
     /* Close transport to force unblock RX thread from recv */
-    ctx = atomic_load_explicit(&conn->transport_ctx, memory_order_relaxed);
+    ctx = atomic_load_explicit(&conn->transport_ctx, memory_order_acquire);
     if (ctx)
     {
         LOG_DBG("Closing transport for %s", conn->busid);

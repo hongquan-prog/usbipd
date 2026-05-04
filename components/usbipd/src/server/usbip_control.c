@@ -24,6 +24,8 @@
 #include "usbip_common.h"
 #include "usbip_control.h"
 
+#define USB_MAX_STRING_DESC_LEN 256
+
 LOG_MODULE_REGISTER(control, CONFIG_USBIP_LOG_LEVEL);
 
 /*****************************************************************************
@@ -98,12 +100,18 @@ int usb_control_handle_setup(const struct usb_setup_packet* setup, struct usb_co
                 }
                 break;
 
-            case USB_REQ_GET_INTERFACE: {
+            case USB_REQ_GET_INTERFACE:
+            {
                 uint8_t intf = setup->wIndex & 0xFF;
+                if (intf >= USB_MAX_INTERFACES)
+                {
+                    return USB_CONTROL_STALL;
+                }
+
                 uint8_t* p = osal_malloc(1);
                 if (p)
                 {
-                    *p = (intf < USB_MAX_INTERFACES) ? ctx->alt_setting[intf] : 0;
+                    *p = ctx->alt_setting[intf];
                     *data_out = p;
                     *data_len = 1;
                     ret = USB_CONTROL_OK;
@@ -112,9 +120,9 @@ int usb_control_handle_setup(const struct usb_setup_packet* setup, struct usb_co
                 {
                     ret = USB_CONTROL_ERROR;
                 }
-            }
-            break;
 
+                break;
+            }
             default:
                 ret = USB_CONTROL_STALL;
                 break;
@@ -258,6 +266,11 @@ int usb_control_get_string(uint8_t index, struct usb_control_context* ctx, void*
     else if (ctx->string_descs && index <= ctx->num_strings)
     {
         str_desc = ctx->string_descs[index - 1];
+        if (str_desc == NULL)
+        {
+            return USB_CONTROL_STALL;
+        }
+
         str_len = str_desc[0]; /* First byte is length */
     }
     else if (ctx->string_handler)
@@ -267,6 +280,11 @@ int usb_control_get_string(uint8_t index, struct usb_control_context* ctx, void*
 
     if (str_desc && str_len > 0)
     {
+        if (str_len > USB_MAX_STRING_DESC_LEN)
+        {
+            str_len = USB_MAX_STRING_DESC_LEN;
+        }
+
         *data_out = osal_malloc(str_len);
         if (*data_out)
         {

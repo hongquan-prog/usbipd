@@ -442,7 +442,9 @@ static int vdap_handle_urb(struct usbip_device_driver* driver, const struct usbi
 
     if (!vdap.exported)
     {
-        urb_ret->u.ret_submit.status = -1;
+        memset(urb_ret, 0, sizeof(*urb_ret));
+        urb_ret->base.command = USBIP_RET_SUBMIT;
+        urb_ret->u.ret_submit.status = -ENODEV;
         return 1;
     }
 

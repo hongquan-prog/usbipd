@@ -90,6 +90,14 @@ void osal_mempool_free(struct osal_mempool* pool, void* ptr)
         return;
     }
 
+    osal_mutex_lock(&pool->lock);
+    if ((uint8_t*)ptr < pool->buffer)
+    {
+        LOG_ERR("mempool_free: pointer %p before pool start %p", ptr, (void*)pool->buffer);
+        osal_mutex_unlock(&pool->lock);
+        return;
+    }
+
     uintptr_t offset = (uint8_t*)ptr - pool->buffer;
     size_t idx = offset / pool->block_size;
 
@@ -97,6 +105,7 @@ void osal_mempool_free(struct osal_mempool* pool, void* ptr)
     {
         /* Not aligned to block boundary - caller passed an invalid pointer */
         LOG_ERR("mempool_free: pointer %p not aligned to block boundary", ptr);
+        osal_mutex_unlock(&pool->lock);
         return;
     }
 
@@ -104,10 +113,25 @@ void osal_mempool_free(struct osal_mempool* pool, void* ptr)
     {
         /* Not in this pool - caller passed an out-of-range pointer */
         LOG_ERR("mempool_free: pointer %p out of pool range", ptr);
+        osal_mutex_unlock(&pool->lock);
         return;
     }
 
-    osal_mutex_lock(&pool->lock);
+    if (pool->free_count >= pool->block_count)
+    {
+        LOG_ERR("mempool_free: free_count overflow, double-free suspected");
+        osal_mutex_unlock(&pool->lock);
+        return;
+    }
+
+    for (size_t i = 0; i < pool->free_count; i++) {
+        if (pool->free_list[i] == idx) {
+            LOG_ERR("mempool_free: double-free detected for block %zu", idx);
+            osal_mutex_unlock(&pool->lock);
+            return;
+        }
+    }
+
     pool->free_list[pool->free_count++] = idx;
     osal_mutex_unlock(&pool->lock);
 }

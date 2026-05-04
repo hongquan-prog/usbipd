@@ -204,66 +204,109 @@ static int usbip_server_handle_devlist(struct usbip_conn_ctx* ctx)
  */
 static int usbip_server_handle_import_req(struct usbip_conn_ctx* ctx)
 {
-    char busid[SYSFS_BUS_ID_SIZE];
+    char busid[SYSFS_BUS_ID_SIZE + 1];
+    struct usbip_usb_device reply_dev;
     struct usbip_device_driver* driver = NULL;
     struct usbip_device_driver* drivers[CONFIG_USBIP_MAX_DRIVERS];
-    const struct usbip_usb_device* found_dev = NULL;
     struct usbip_connection* conn = NULL;
-    struct usbip_usb_device reply_dev;
+    const struct usbip_usb_device* found_dev = NULL;
     int found = 0;
     int num_drivers = 0;
-    int i;
+    int i, j, dev_count;
 
-    /* Receive busid */
     memset(busid, 0, sizeof(busid));
-    if (transport_recv(ctx, busid, sizeof(busid)) != sizeof(busid))
+    if (transport_recv(ctx, busid, SYSFS_BUS_ID_SIZE) != SYSFS_BUS_ID_SIZE)
     {
         LOG_ERR("Failed to receive busid");
-        usbip_send_op_common(ctx, OP_REP_IMPORT, ST_ERROR);
         return -1;
     }
 
-    /* Check connection limit before processing import */
-    if (usbip_conn_manager_get_count() >= USBIP_MAX_CONNECTIONS)
+    busid[SYSFS_BUS_ID_SIZE] = '\0';
+    LOG_DBG("Received OP_REQ_IMPORT for busid: %s", busid);
+
+    /* Check device availability */
+    if (!usbip_is_device_available(busid))
     {
-        LOG_WRN("Maximum connections (%d) reached, rejecting import request for %s",
-                USBIP_MAX_CONNECTIONS, busid);
-        usbip_send_op_common(ctx, OP_REP_IMPORT, ST_DEV_BUSY);
+        LOG_WRN("Device %s is not available", busid);
+        usbip_send_op_common(ctx, OP_REP_IMPORT, ST_NODEV);
         return -1;
     }
 
-    /* Find device */
+    /* Find the device */
     num_drivers = usbip_devmgr_get_driver_snapshot(drivers, CONFIG_USBIP_MAX_DRIVERS);
     for (i = 0; i < num_drivers && !found; i++)
     {
         driver = drivers[i];
-        found_dev = usbip_driver_get_device(driver, busid);
-        if (found_dev)
+        dev_count = usbip_driver_get_device_count(driver);
+        for (j = 0; j < dev_count; j++)
         {
-            found = 1;
-            break;
+            if (usbip_driver_get_device_by_index(driver, j, &reply_dev) < 0)
+            {
+                continue;
+            }
+            if (strcmp(reply_dev.busid, busid) == 0)
+            {
+                found = 1;
+                found_dev = &reply_dev;
+                break;
+            }
         }
     }
 
     if (!found)
     {
-        LOG_WRN("Device not found: %s", busid);
+        LOG_ERR("Device %s not found in driver", busid);
         usbip_send_op_common(ctx, OP_REP_IMPORT, ST_NODEV);
         return -1;
     }
 
-    if (!usbip_is_device_available(busid))
+    /* Check connection limit */
+    if (usbip_conn_manager_get_count() >= USBIP_MAX_CONNECTIONS)
     {
-        LOG_WRN("Device busy: %s", busid);
-        usbip_send_op_common(ctx, OP_REP_IMPORT, ST_DEV_BUSY);
+        LOG_WRN("Connection limit reached");
+        usbip_send_op_common(ctx, OP_REP_IMPORT, ST_ERROR);
         return -1;
     }
 
-    /* Send success response */
+    /* Create connection */
+    conn = usbip_connection_create(ctx);
+    if (conn == NULL)
+    {
+        LOG_ERR("Failed to create connection for %s", busid);
+        usbip_send_op_common(ctx, OP_REP_IMPORT, ST_ERROR);
+        return -1;
+    }
+
+    if (usbip_conn_manager_add(conn) < 0)
+    {
+        LOG_ERR("Failed to add connection to manager");
+        goto err_destroy_conn;
+    }
+
+    if (usbip_bind_device(busid, conn) < 0)
+    {
+        LOG_ERR("Failed to bind device %s", busid);
+        goto err_remove_conn;
+    }
+
+    if (usbip_driver_export_device(driver, busid, conn) < 0)
+    {
+        LOG_ERR("Failed to export device %s", busid);
+        goto err_unbind;
+    }
+
+    /* Start connection processing threads */
+    if (usbip_connection_start(conn, driver, busid) < 0)
+    {
+        LOG_ERR("Failed to start connection for %s", busid);
+        goto err_unexport;
+    }
+
+    /* All setup done, now send success response */
     if (usbip_send_op_common(ctx, OP_REP_IMPORT, ST_OK) < 0)
     {
         LOG_ERR("Failed to send OP_REP_IMPORT header");
-        return -1;
+        goto err_unexport;
     }
 
     /* Send device descriptor */
@@ -273,58 +316,21 @@ static int usbip_server_handle_import_req(struct usbip_conn_ctx* ctx)
     if (transport_send(ctx, &reply_dev, sizeof(reply_dev)) != sizeof(reply_dev))
     {
         LOG_ERR("Failed to send device description");
-        return -1;
+        goto err_unexport;
     }
-
-    /* Create connection for this device */
-    conn = usbip_connection_create(ctx);
-    if (conn == NULL)
-    {
-        LOG_ERR("Failed to create connection for device: %s", busid);
-        return -1;
-    }
-
-    /* Add to connection manager */
-    if (usbip_conn_manager_add(conn) < 0)
-    {
-        LOG_ERR("Failed to add connection to manager");
-        usbip_connection_destroy(conn);
-        return -1;
-    }
-
-    /* Bind device to connection */
-    if (usbip_bind_device(busid, conn) < 0)
-    {
-        LOG_ERR("Failed to bind device: %s", busid);
-        usbip_conn_manager_remove(conn);
-        usbip_connection_destroy(conn);
-        return -1;
-    }
-
-    /* Export device via driver */
-    if (usbip_driver_export_device(driver, busid, conn) < 0)
-    {
-        LOG_ERR("Failed to export device: %s", busid);
-        usbip_unbind_device(busid);
-        usbip_conn_manager_remove(conn);
-        usbip_connection_destroy(conn);
-        return -1;
-    }
-
-    /* Start connection URB processing (non-blocking) */
-    if (usbip_connection_start(conn, driver, busid) < 0)
-    {
-        LOG_ERR("Failed to start connection for device: %s", busid);
-        usbip_driver_unexport_device(driver, busid);
-        usbip_unbind_device(busid);
-        usbip_conn_manager_remove(conn);
-        usbip_connection_destroy(conn);
-        return -1;
-    }
-
-    LOG_INF("Device imported and connection started: %s", busid);
 
     return 0;
+
+err_unexport:
+    usbip_driver_unexport_device(driver, busid);
+err_unbind:
+    usbip_unbind_device(busid);
+err_remove_conn:
+    usbip_conn_manager_remove(conn);
+err_destroy_conn:
+    usbip_connection_destroy(conn);
+
+    return -1;
 }
 
 /*****************************************************************************
@@ -359,7 +365,7 @@ static void usbip_server_handle_single_op(struct usbip_conn_ctx* ctx)
     if (op.version != USBIP_VERSION)
     {
         LOG_ERR("Unsupported version: 0x%04x", op.version);
-        usbip_send_op_common(ctx, op.code | OP_REPLY, ST_ERROR);
+        usbip_send_op_common(ctx, op.code & ~OP_REQUEST, ST_ERROR);
         transport_close(ctx);
         return;
     }
@@ -383,7 +389,7 @@ static void usbip_server_handle_single_op(struct usbip_conn_ctx* ctx)
 
         default:
             LOG_WRN("Unknown operation: 0x%04x", op.code);
-            usbip_send_op_common(ctx, op.code | OP_REPLY, ST_NA);
+            usbip_send_op_common(ctx, op.code & ~OP_REQUEST, ST_NA);
             transport_close(ctx);
             break;
     }

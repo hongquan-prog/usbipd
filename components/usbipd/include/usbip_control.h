@@ -45,6 +45,7 @@ extern "C" {
         .num_configs = 1,                                                                          \
         .address = 0,                                                                              \
         .config_value = 0,                                                                         \
+        .alt_setting = {0},                                                                        \
     }
 
 

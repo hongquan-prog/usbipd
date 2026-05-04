@@ -66,6 +66,7 @@ int hid_normalize_report_id(struct hid_device_ctx* ctx, const void* input, size_
     const uint8_t* src;
     uint8_t* dst;
     size_t report_size;
+    size_t copy_len;
 
     if (!input || !output || !output_len)
     {
@@ -85,13 +86,16 @@ int hid_normalize_report_id(struct hid_device_ctx* ctx, const void* input, size_
     switch (ctx->report_id_mode)
     {
         case HID_REPORT_ID_NONE:
+        {
             /*
              * No processing, copy as-is
              * For: cases where no Report ID handling is needed
              */
-            memcpy(dst, src, input_len);
-            *output_len = input_len;
+            copy_len = input_len < report_size ? input_len : report_size;
+            memcpy(dst, src, copy_len);
+            *output_len = copy_len;
             break;
+        }
 
         case HID_REPORT_ID_STRIP:
             /*
@@ -179,13 +183,13 @@ int hid_normalize_report_id(struct hid_device_ctx* ctx, const void* input, size_
                  * Normal case: full 64-byte report
                  * CMSIS-DAP has no Report ID, pass through as-is
                  */
-                memcpy(dst, src, input_len);
-                *output_len = input_len;
+                memcpy(dst, src, report_size);
+                *output_len = report_size;
                 *report_id = 0;
             }
             else if (input_len == report_size - 1)
             {
-                /* 
+                /*
                  * Some Windows HID drivers may send 63 bytes
                  * Pass through as-is, pad with 0 at end to ensure DAP doesn't read garbage
                  */
@@ -197,9 +201,10 @@ int hid_normalize_report_id(struct hid_device_ctx* ctx, const void* input, size_
             }
             else
             {
-                /* Other cases, copy as-is */
-                memcpy(dst, src, input_len);
-                *output_len = input_len;
+                /* Other cases, copy with size limit */
+                copy_len = input_len < report_size ? input_len : report_size;
+                memcpy(dst, src, copy_len);
+                *output_len = copy_len;
                 *report_id = 0;
             }
             break;
