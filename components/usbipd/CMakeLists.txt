@@ -16,6 +16,7 @@ set(COMPONENT_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/hal/usbip_transport.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/posix/osal_posix.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/posix/transport_tcp.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/usbip_util.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/hid_dap.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/bulk_dap.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/server/usbipd.c

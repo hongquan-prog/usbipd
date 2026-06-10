@@ -27,6 +27,7 @@
 #include "usbip_common.h"
 #include "usbip_control.h"
 #include "usbip_devmgr.h"
+#include "usbip_util.h"
 
 LOG_MODULE_REGISTER(dap_v2, CONFIG_DAP_LOG_LEVEL);
 
@@ -43,6 +44,10 @@ extern uint32_t dap_process_command_safety(const uint8_t* request, uint8_t* resp
 #define BULK_DAP_VID 0x0D28
 #define BULK_DAP_PID 0x0204
 #define BULK_DAP_PACKET_SIZE 512 /* High Speed Bulk packet size */
+#define BULK_DAP_MFR_STR      USBIP_STR_MANUFACTURER
+#define BULK_DAP_PRODUCT_STR  USBIP_STR_PRODUCT_BULK
+#define BULK_DAP_SERIAL_STR   USBIP_STR_SERIAL
+#define BULK_DAP_INTF_STR     USBIP_STR_BULK_INTF
 
 /* Compile-time check: BULK_DAP_PACKET_SIZE must not exceed CONFIG_USBIP_URB_DATA_MAX_SIZE */
 #if BULK_DAP_PACKET_SIZE > CONFIG_USBIP_URB_DATA_MAX_SIZE
@@ -189,22 +194,19 @@ static const struct dap_v2_config_desc dap_v2_cfg_desc = {
  *****************************************************************************/
 
 /* clang-format off */
-static const uint8_t string0_desc[] = { 
-    0x04, USB_DT_STRING, 0x09, 0x04 };
-static const uint8_t string1_desc[] = { 
-    0x0A, USB_DT_STRING,
-    'R', 0, 'P', 0, 'I', 0, '5', 0 };
-static const uint8_t string2_desc[] = { 0x1C, USB_DT_STRING,
-    'B', 0, 'L', 0, 'K', 0, ' ', 0, 'C', 0, 'M', 0,
-    'S', 0, 'I', 0, 'S', 0, '-', 0, 'D', 0, 'A', 0, 'P', 0 };
-static const uint8_t string3_desc[] = { 0x14, USB_DT_STRING,
-    '1', 0, '2', 0, '3', 0, '4', 0, '5', 0, '6', 0, '7', 0, '8', 0, '9', 0, '0', 0 };
-static const uint8_t string4_desc[] = { 0x14, USB_DT_STRING,
-    'C', 0, 'M', 0, 'S', 0, 'I', 0, 'S', 0, '-', 0, 'D', 0, 'A', 0, 'P', 0, ' ', 0, 'v', 0, '2', 0 };
+static const uint8_t string0_desc[] = { 0x04, USB_DT_STRING, 0x09, 0x04 };
 /* clang-format on */
 
-static const uint8_t* dap_v2_string_descs[] = {string1_desc, string2_desc, string3_desc,
-                                               string4_desc};
+static uint8_t s_string1_desc[2 + ((sizeof(BULK_DAP_MFR_STR) - 1) * 2)] = {0};
+static uint8_t s_string2_desc[2 + ((sizeof(BULK_DAP_PRODUCT_STR) - 1) * 2)] = {0};
+static uint8_t s_string3_desc[2 + ((sizeof(BULK_DAP_SERIAL_STR) - 1) * 2)] = {0};
+static uint8_t s_string4_desc[2 + ((sizeof(BULK_DAP_INTF_STR) - 1) * 2)] = {0};
+static const uint8_t* dap_v2_string_descs[] = {
+    s_string1_desc,
+    s_string2_desc,
+    s_string3_desc,
+    s_string4_desc,
+};
 
 /*****************************************************************************
  * DAP v2 Device State
@@ -573,6 +575,12 @@ static int vdap_v2_init(struct usbip_device_driver* driver)
 
     vdap_v2.ctrl_ctx = (struct usb_control_context)USB_CONTROL_CONTEXT_INIT(
         &dap_v2_dev_desc, &dap_v2_cfg_desc, sizeof(dap_v2_cfg_desc));
+
+    ascii_string_to_utf16le(s_string1_desc, sizeof(s_string1_desc), BULK_DAP_MFR_STR);
+    ascii_string_to_utf16le(s_string2_desc, sizeof(s_string2_desc), BULK_DAP_PRODUCT_STR);
+    ascii_string_to_utf16le(s_string3_desc, sizeof(s_string3_desc), BULK_DAP_SERIAL_STR);
+    ascii_string_to_utf16le(s_string4_desc, sizeof(s_string4_desc), BULK_DAP_INTF_STR);
+
     vdap_v2.ctrl_ctx.lang_id_desc = string0_desc;
     vdap_v2.ctrl_ctx.string_descs = dap_v2_string_descs;
     vdap_v2.ctrl_ctx.num_strings = 4;
