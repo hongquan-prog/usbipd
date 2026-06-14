@@ -27,6 +27,7 @@
 #include "usbip_control.h"
 #include "usbip_hid.h"
 #include "usbip_devmgr.h"
+#include "usbip_util.h"
 
 LOG_MODULE_REGISTER(dap, CONFIG_DAP_LOG_LEVEL);
 
@@ -62,6 +63,9 @@ uint32_t dap_process_command_safety(const uint8_t* request, uint8_t* response)
 #define DAP_VID 0xFAED
 #define DAP_PID 0x4873
 #define HID_DAP_PACKET_SIZE 64
+#define HID_DAP_MFR_STR     USBIP_STR_MANUFACTURER
+#define HID_DAP_PRODUCT_STR USBIP_STR_PRODUCT_HID
+#define HID_DAP_SERIAL_STR  USBIP_STR_SERIAL
 
 /**************************************************************************
  * BOS Descriptor - Contains Microsoft OS 2.0 Platform Capability
@@ -239,17 +243,16 @@ static const struct dap_config_desc dap_cfg_desc = {
 
 /* clang-format off */
 static const uint8_t string0_desc[] = {0x04, USB_DT_STRING, 0x09, 0x04};
-static const uint8_t string1_desc[] = {0x0A, USB_DT_STRING, 'R', 0, 'P', 0, 'I', 0, '5', 0};
-static const uint8_t string2_desc[] = {0x1C, USB_DT_STRING, 
-    'H', 0, 'I', 0, 'D', 0, ' ', 0, 'C', 0, 'M', 0, 'S',
-     0, 'I', 0, 'S', 0, '-', 0, 'D', 0, 'A', 0, 'P', 0};
-/* String 3: Serial Number - "0000001" = 7 chars, len = 2 + 7*2 = 16 = 0x10 */
-static const uint8_t string3_desc[] = {0x10, USB_DT_STRING, 
-                                      '0', 0, '0', 0, '0', 0, '0',
-                                       0, '0', 0, '0', 0, '1', 0};
 /* clang-format on */
 
-static const uint8_t* dap_string_descs[] = {string1_desc, string2_desc, string3_desc};
+static uint8_t s_string1_desc[2 + ((sizeof(HID_DAP_MFR_STR) - 1) * 2)] = {0};
+static uint8_t s_string2_desc[2 + ((sizeof(HID_DAP_PRODUCT_STR) - 1) * 2)] = {0};
+static uint8_t s_string3_desc[2 + ((sizeof(HID_DAP_SERIAL_STR) - 1) * 2)] = {0};
+static const uint8_t* dap_string_descs[] = {
+    s_string1_desc,
+    s_string2_desc,
+    s_string3_desc,
+};
 
 /**************************************************************************
  * DAP Device State
@@ -698,6 +701,7 @@ static int vdap_unexport_device(struct usbip_device_driver* driver, const char* 
 static int vdap_init(struct usbip_device_driver* driver)
 {
     int ret;
+    char serial_ascii[sizeof(HID_DAP_SERIAL_STR)] = {0};
 
     (void)driver;
 
@@ -731,6 +735,16 @@ static int vdap_init(struct usbip_device_driver* driver)
     vdap.ctrl_ctx.descriptor_handler = hid_dap_descriptor_handler;
     vdap.ctrl_ctx.class_handler = hid_dap_class_handler;
     vdap.ctrl_ctx.user_data = &vdap;
+
+    ascii_string_to_utf16le(s_string1_desc, sizeof(s_string1_desc), HID_DAP_MFR_STR);
+    ascii_string_to_utf16le(s_string2_desc, sizeof(s_string2_desc), HID_DAP_PRODUCT_STR);
+    ascii_string_to_utf16le(s_string3_desc, sizeof(s_string3_desc), HID_DAP_SERIAL_STR);
+
+    if (usbip_desc_get_serial_ascii(serial_ascii, sizeof(serial_ascii)))
+    {
+        ascii_string_to_utf16le(s_string3_desc, sizeof(s_string3_desc), serial_ascii);
+        LOG_INF("HID DAP serial descriptor overridden by platform provider");
+    }
     vdap.ctrl_ctx.lang_id_desc = string0_desc;
     vdap.ctrl_ctx.string_descs = dap_string_descs;
     vdap.ctrl_ctx.num_strings = 3;
